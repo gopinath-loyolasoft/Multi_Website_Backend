@@ -413,7 +413,7 @@ public class TenantProvisioningService : ITenantProvisioningService
                 });
         }
 
-        // Blank Home page (unpublished template)
+        // Initial Home page with full suite of dynamic college module sections
         var pageCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM pages;");
         if (pageCount == 0)
         {
@@ -423,10 +423,29 @@ public class TenantProvisioningService : ITenantProvisioningService
                 VALUES (@pageId, 'home', @title, @desc, TRUE);",
                 new { pageId, title = $"Welcome to {collegeName}", desc = $"Official website of {collegeName}" });
 
-            await conn.ExecuteAsync(@"
-                INSERT INTO page_sections (page_id, section_type, title, content_json, sort_order, is_visible)
-                VALUES (@pageId, 'HERO', 'Hero Banner', '{}'::jsonb, 1, TRUE);",
-                new { pageId });
+            var defaultSections = new[]
+            {
+                new { SecType = "HERO_SLIDER", Title = "Hero Slider & Highlights", Subtitle = "Campus showcase and online admissions call to action", Sort = 1 },
+                new { SecType = "STATISTICS", Title = "Key Statistics & Milestones", Subtitle = "Institutional track record, accreditations, and student excellence", Sort = 2 },
+                new { SecType = "QUOTE", Title = "Leadership & Vision", Subtitle = "Message from the Chancellor & Academic Directorate", Sort = 3 },
+                new { SecType = "DEPARTMENTS", Title = "Academic Departments", Subtitle = "Specialized schools offering cutting-edge undergraduate & postgraduate disciplines", Sort = 4 },
+                new { SecType = "COURSES", Title = "Degree Programs & Curricula", Subtitle = "Industry-aligned academic pathways and career-oriented certifications", Sort = 5 },
+                new { SecType = "FACULTY", Title = "Distinguished Faculty", Subtitle = "Renowned professors, doctorate researchers, and industry fellows", Sort = 6 },
+                new { SecType = "NEWS", Title = "Latest Campus News", Subtitle = "Campus events, research breakthroughs, honors, and press announcements", Sort = 7 },
+                new { SecType = "EVENTS", Title = "Upcoming Campus Events", Subtitle = "Academic conferences, symposiums, student fests, and cultural celebrations", Sort = 8 },
+                new { SecType = "NOTICES", Title = "Official Notice Board", Subtitle = "Important administrative updates, examination schedules, and circulars", Sort = 9 },
+                new { SecType = "GALLERY", Title = "Campus Photo Gallery", Subtitle = "A visual journey across our world-class laboratories, library, and campus architecture", Sort = 10 },
+                new { SecType = "TESTIMONIALS", Title = "Placement Records & Testimonials", Subtitle = "Top corporate recruiters and success stories from our graduates", Sort = 11 },
+                new { SecType = "CONTACT", Title = "Campus Helpdesk & Location", Subtitle = "Reach our admissions desk, administrative offices, and visit our campus", Sort = 12 }
+            };
+
+            foreach (var s in defaultSections)
+            {
+                await conn.ExecuteAsync(@"
+                    INSERT INTO page_sections (page_id, section_type, title, subtitle, content_json, settings_json, sort_order, is_visible)
+                    VALUES (@pageId, @SecType, @Title, @Subtitle, '{}'::jsonb, '{""columns"":3,""cardVariant"":""standard"",""alignment"":""center"",""background"":""light"",""spacing"":""normal"",""containerWidth"":""standard""}'::jsonb, @Sort, TRUE);",
+                    new { pageId, s.SecType, s.Title, s.Subtitle, s.Sort });
+            }
 
             await conn.ExecuteAsync(@"
                 INSERT INTO page_versions (page_id, version_number, title, slug, content_json, created_by)

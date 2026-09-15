@@ -213,6 +213,14 @@ public class PagesController : ControllerBase
         var success = await sectionService.ReorderSectionsAsync(pageId, request.SectionIds);
         return Ok(ApiResponse<bool>.Ok(success, "Sections reordered"));
     }
+
+    [HttpPost("{pageId}/sections/seed-default")]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<PageSectionDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SeedDefaultSections([FromRoute] Guid pageId, [FromServices] ISectionService sectionService)
+    {
+        var list = await sectionService.SeedDefaultSectionsAsync(pageId);
+        return Ok(ApiResponse<IEnumerable<PageSectionDto>>.Ok(list, "Default module sections seeded successfully"));
+    }
 }
 
 // -------------------------------------------------------------

@@ -818,6 +818,53 @@ public class SectionService : ISectionService
         return true;
     }
 
+    public async Task<IEnumerable<PageSectionDto>> SeedDefaultSectionsAsync(Guid pageId)
+    {
+        var existingSections = (await _sectionRepo.GetByPageIdAsync(pageId)).ToList();
+        var existingTypes = new HashSet<string>(existingSections.Select(s => s.SectionType.ToUpperInvariant()));
+
+        var defaultBlueprint = new List<(string Type, string Title, string Subtitle, int Sort)>
+        {
+            ("HERO_SLIDER", "Hero Slider & Highlights", "Campus showcase and online admissions call to action", 1),
+            ("STATISTICS", "Key Statistics & Milestones", "Institutional track record, accreditations, and student excellence", 2),
+            ("QUOTE", "Leadership & Vision", "Message from the Chancellor & Academic Directorate", 3),
+            ("DEPARTMENTS", "Academic Departments", "Specialized schools offering cutting-edge undergraduate & postgraduate disciplines", 4),
+            ("COURSES", "Degree Programs & Curricula", "Industry-aligned academic pathways and career-oriented certifications", 5),
+            ("FACULTY", "Distinguished Faculty", "Renowned professors, doctorate researchers, and industry fellows", 6),
+            ("NEWS", "Latest Campus News", "Campus events, research breakthroughs, honors, and press announcements", 7),
+            ("EVENTS", "Upcoming Campus Events", "Academic conferences, symposiums, student fests, and cultural celebrations", 8),
+            ("NOTICES", "Official Notice Board", "Important administrative updates, examination schedules, and circulars", 9),
+            ("GALLERY", "Campus Photo Gallery", "A visual journey across our world-class laboratories, library, and campus architecture", 10),
+            ("TESTIMONIALS", "Placement Records & Testimonials", "Top corporate recruiters and success stories from our graduates", 11),
+            ("CONTACT", "Campus Helpdesk & Location", "Reach our admissions desk, administrative offices, and visit our campus", 12)
+        };
+
+        int maxOrder = existingSections.Any() ? existingSections.Max(s => s.SortOrder) : 0;
+
+        foreach (var item in defaultBlueprint)
+        {
+            // If the section type doesn't exist, or if HERO exists but not HERO_SLIDER/other types
+            if (!existingTypes.Contains(item.Type) && !(item.Type == "HERO_SLIDER" && existingTypes.Contains("HERO")))
+            {
+                maxOrder++;
+                var section = new PageSection
+                {
+                    PageId = pageId,
+                    SectionType = item.Type,
+                    Title = item.Title,
+                    Subtitle = item.Subtitle,
+                    ContentJson = "{}",
+                    SettingsJson = "{\"columns\":3,\"cardVariant\":\"standard\",\"alignment\":\"center\",\"background\":\"light\",\"spacing\":\"normal\",\"containerWidth\":\"standard\"}",
+                    SortOrder = maxOrder,
+                    IsVisible = true
+                };
+                await _sectionRepo.CreateAsync(section);
+            }
+        }
+
+        return await GetSectionsByPageIdAsync(pageId);
+    }
+
     public IEnumerable<SectionTypeDto> GetSectionTypes()
     {
         return new List<SectionTypeDto>

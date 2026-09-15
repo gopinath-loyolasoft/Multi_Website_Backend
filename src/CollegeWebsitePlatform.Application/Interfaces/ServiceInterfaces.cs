@@ -54,6 +54,7 @@ public interface ISectionService
     Task<PageSectionDto> UpdateSectionAsync(Guid pageId, Guid sectionId, UpdateSectionRequest request);
     Task<bool> DeleteSectionAsync(Guid pageId, Guid sectionId);
     Task<bool> ReorderSectionsAsync(Guid pageId, List<Guid> sectionIds);
+    Task<IEnumerable<PageSectionDto>> SeedDefaultSectionsAsync(Guid pageId);
     IEnumerable<SectionTypeDto> GetSectionTypes();
 }
 
