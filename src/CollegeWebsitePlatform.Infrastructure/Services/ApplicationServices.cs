@@ -2904,7 +2904,6 @@ public class CapabilityService : ICapabilityService
             new AdminModuleDto { Key = "contact", Label = "Contact Inquiries", Path = "/admin/contact", Icon = "Mail", RequiredFeature = "CONTACT", IsEnabled = enabledCodes.Contains("CONTACT") },
             new AdminModuleDto { Key = "stats", Label = "Key Highlights & Stats", Path = "/admin/stats", Icon = "BarChart2", RequiredFeature = "STATS", IsEnabled = enabledCodes.Contains("STATS") },
             new AdminModuleDto { Key = "quote", Label = "Leadership Quote", Path = "/admin/quote", Icon = "Quote", RequiredFeature = "QUOTE", IsEnabled = enabledCodes.Contains("QUOTE") },
-            new AdminModuleDto { Key = "placements", Label = "Placements", Path = "/admin/placements", Icon = "Briefcase", RequiredFeature = "PLACEMENTS", IsEnabled = enabledCodes.Contains("PLACEMENTS") },
             new AdminModuleDto { Key = "settings", Label = "College Profile", Path = "/admin/settings", Icon = "Settings", RequiredFeature = "", IsEnabled = true }
         };
 

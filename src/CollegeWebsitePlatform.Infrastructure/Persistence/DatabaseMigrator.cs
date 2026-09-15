@@ -1024,9 +1024,8 @@ public static class DatabaseMigrator
             ('MEDIA', 'Media Library', 'Centralized document, image, and asset storage', 'Media', 'Folder', 13, TRUE),
             ('TESTIMONIALS', 'Student Testimonials', 'Alumni quotes, ratings, and student reviews', 'Content', 'MessageSquare', 14, TRUE),
             ('CONTACT', 'Contact & Inquiries', 'Campus address, inquiry submission forms, and map', 'Communication', 'Mail', 15, TRUE),
-            ('STATS', 'Milestones & Counters', 'Accreditations, placement ratios, and metric stats', 'Content', 'BarChart2', 16, TRUE),
-            ('QUOTE', 'Principal / Dean Quote', 'Leadership message and official greeting block', 'Content', 'Quote', 17, TRUE),
-            ('PLACEMENTS', 'Placements & Careers', 'Placement recruiters, average package, and career cell', 'Engagement', 'Briefcase', 18, TRUE)
+            ('STATS', 'Milestones & Counters', 'Accreditations and metric stats', 'Content', 'BarChart2', 16, TRUE),
+            ('QUOTE', 'Principal / Dean Quote', 'Leadership message and official greeting block', 'Content', 'Quote', 17, TRUE)
             ON CONFLICT (code) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
@@ -1040,6 +1039,7 @@ public static class DatabaseMigrator
             SELECT t.id, f.code, TRUE
             FROM tenants t
             CROSS JOIN features f
+            WHERE f.is_active = TRUE
             ON CONFLICT (tenant_id, feature_code) DO NOTHING;");
 
         // 3b. Seed Standard Templates
@@ -1049,8 +1049,8 @@ public static class DatabaseMigrator
                 'ENGINEERING_MODERN',
                 'Modern Engineering & Technology',
                 'ENGINEERING',
-                'Tailored for engineering, polytechnic, and technical colleges with lab highlights, research metrics, placements, and accreditation showcases.',
-                '[""PAGES"",""MENUS"",""BANNERS"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""GALLERY"",""MEDIA"",""CONTACT"",""PLACEMENTS"",""STATS"",""MARQUEE""]'::jsonb,
+                'Tailored for engineering, polytechnic, and technical colleges with lab highlights, research metrics, and accreditation showcases.',
+                '[""PAGES"",""MENUS"",""BANNERS"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""GALLERY"",""MEDIA"",""CONTACT"",""STATS"",""MARQUEE""]'::jsonb,
                 @themeBlueId,
                 '[]'::jsonb,
                 '[]'::jsonb,
@@ -1083,7 +1083,7 @@ public static class DatabaseMigrator
                 'Comprehensive University Modern',
                 'UNIVERSITY',
                 'Prestigious collegiate aesthetic designed for multi-disciplinary universities with research centers, faculties, and international admissions.',
-                '[""PAGES"",""MENUS"",""MEDIA"",""CONTACT"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""ADMISSIONS"",""BANNERS"",""MARQUEE"",""STATS"",""TESTIMONIALS"",""PLACEMENTS""]'::jsonb,
+                '[""PAGES"",""MENUS"",""MEDIA"",""CONTACT"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""ADMISSIONS"",""BANNERS"",""MARQUEE"",""STATS"",""TESTIMONIALS""]'::jsonb,
                 @themeCrimsonId,
                 '[]'::jsonb,
                 '[]'::jsonb,

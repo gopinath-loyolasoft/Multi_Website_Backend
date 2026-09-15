@@ -435,7 +435,7 @@ public class TenantProvisioningService : ITenantProvisioningService
                 new { SecType = "EVENTS", Title = "Upcoming Campus Events", Subtitle = "Academic conferences, symposiums, student fests, and cultural celebrations", Sort = 8 },
                 new { SecType = "NOTICES", Title = "Official Notice Board", Subtitle = "Important administrative updates, examination schedules, and circulars", Sort = 9 },
                 new { SecType = "GALLERY", Title = "Campus Photo Gallery", Subtitle = "A visual journey across our world-class laboratories, library, and campus architecture", Sort = 10 },
-                new { SecType = "TESTIMONIALS", Title = "Placement Records & Testimonials", Subtitle = "Top corporate recruiters and success stories from our graduates", Sort = 11 },
+                new { SecType = "TESTIMONIALS", Title = "Student Testimonials & Stories", Subtitle = "Inspiring experiences and success stories from our graduates", Sort = 11 },
                 new { SecType = "CONTACT", Title = "Campus Helpdesk & Location", Subtitle = "Reach our admissions desk, administrative offices, and visit our campus", Sort = 12 }
             };
 
