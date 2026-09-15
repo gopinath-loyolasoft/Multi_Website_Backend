@@ -1132,6 +1132,7 @@ public class GalleryDto
     public string Slug { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? CoverImageUrl { get; set; }
+    public string Category { get; set; } = "Campus";
     public bool IsPublished { get; set; }
     public List<GalleryImageDto> Images { get; set; } = new();
 }
@@ -1151,6 +1152,9 @@ public class CreateGalleryRequest
 
     [MaxLength(2000)]
     public string? CoverImageUrl { get; set; }
+
+    [MaxLength(100)]
+    public string? Category { get; set; } = "Campus";
 }
 
 public class UpdateGalleryRequest
@@ -1159,6 +1163,7 @@ public class UpdateGalleryRequest
     public string Slug { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? CoverImageUrl { get; set; }
+    public string? Category { get; set; }
 }
 
 public class GalleryImageDto

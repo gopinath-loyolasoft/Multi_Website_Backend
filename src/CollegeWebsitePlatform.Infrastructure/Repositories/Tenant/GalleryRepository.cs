@@ -35,7 +35,7 @@ public class GalleryRepository
         param.Add("Offset", offset);
 
         var dataSql = $@"
-            SELECT id, title, slug, description, cover_image_url AS CoverImageUrl, is_published AS IsPublished
+            SELECT id, title, slug, description, cover_image_url AS CoverImageUrl, COALESCE(category, 'Campus') AS Category, is_published AS IsPublished
             FROM galleries 
             {whereClause}
             ORDER BY created_at DESC 
@@ -57,7 +57,7 @@ public class GalleryRepository
     public async Task<GalleryDto?> GetByIdAsync(Guid id)
     {
         using var conn = _db.CreateConnection();
-        var sql = "SELECT id, title, slug, description, cover_image_url AS CoverImageUrl, is_published AS IsPublished FROM galleries WHERE id = @id AND is_deleted = FALSE;";
+        var sql = "SELECT id, title, slug, description, cover_image_url AS CoverImageUrl, COALESCE(category, 'Campus') AS Category, is_published AS IsPublished FROM galleries WHERE id = @id AND is_deleted = FALSE;";
         var gallery = await conn.QueryFirstOrDefaultAsync<GalleryDto>(sql, new { id });
         if (gallery == null) return null;
 
@@ -72,7 +72,7 @@ public class GalleryRepository
     public async Task<GalleryDto?> GetBySlugAsync(string slug)
     {
         using var conn = _db.CreateConnection();
-        var sql = "SELECT id, title, slug, description, cover_image_url AS CoverImageUrl, is_published AS IsPublished FROM galleries WHERE LOWER(slug) = LOWER(@slug) AND is_deleted = FALSE;";
+        var sql = "SELECT id, title, slug, description, cover_image_url AS CoverImageUrl, COALESCE(category, 'Campus') AS Category, is_published AS IsPublished FROM galleries WHERE LOWER(slug) = LOWER(@slug) AND is_deleted = FALSE;";
         var gallery = await conn.QueryFirstOrDefaultAsync<GalleryDto>(sql, new { slug });
         if (gallery == null) return null;
 
@@ -87,23 +87,25 @@ public class GalleryRepository
     public async Task<Guid> CreateAsync(CreateGalleryRequest req)
     {
         using var conn = _db.CreateConnection();
+        var category = string.IsNullOrWhiteSpace(req.Category) ? "Campus" : req.Category.Trim();
         var sql = @"
-            INSERT INTO galleries (title, slug, description, cover_image_url, is_published, created_at, updated_at)
-            VALUES (@Title, LOWER(@Slug), @Description, @CoverImageUrl, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO galleries (title, slug, description, cover_image_url, category, is_published, created_at, updated_at)
+            VALUES (@Title, LOWER(@Slug), @Description, @CoverImageUrl, @Category, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id;";
 
-        return await conn.ExecuteScalarAsync<Guid>(sql, req);
+        return await conn.ExecuteScalarAsync<Guid>(sql, new { req.Title, req.Slug, req.Description, req.CoverImageUrl, Category = category });
     }
 
     public async Task<bool> UpdateAsync(Guid id, UpdateGalleryRequest req)
     {
         using var conn = _db.CreateConnection();
+        var category = string.IsNullOrWhiteSpace(req.Category) ? "Campus" : req.Category.Trim();
         var sql = @"
             UPDATE galleries 
-            SET title = @Title, slug = LOWER(@Slug), description = @Description, cover_image_url = @CoverImageUrl, updated_at = CURRENT_TIMESTAMP 
+            SET title = @Title, slug = LOWER(@Slug), description = @Description, cover_image_url = @CoverImageUrl, category = @Category, updated_at = CURRENT_TIMESTAMP 
             WHERE id = @id;";
 
-        var rows = await conn.ExecuteAsync(sql, new { id, req.Title, req.Slug, req.Description, req.CoverImageUrl });
+        var rows = await conn.ExecuteAsync(sql, new { id, req.Title, req.Slug, req.Description, req.CoverImageUrl, Category = category });
         return rows > 0;
     }
 

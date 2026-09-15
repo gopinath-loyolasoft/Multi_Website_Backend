@@ -526,10 +526,12 @@ public static class DatabaseMigrator
             slug VARCHAR(255) UNIQUE NOT NULL,
             description TEXT,
             cover_image_url VARCHAR(500),
+            category VARCHAR(100) DEFAULT 'Campus',
             is_published BOOLEAN NOT NULL DEFAULT TRUE,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
+        ALTER TABLE galleries ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Campus';
 
         CREATE TABLE IF NOT EXISTS gallery_images (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

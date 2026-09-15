@@ -277,6 +277,7 @@ public class Gallery : ISoftDeletable
     public string Slug { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? CoverImageUrl { get; set; }
+    public string Category { get; set; } = "Campus";
     public bool IsPublished { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
