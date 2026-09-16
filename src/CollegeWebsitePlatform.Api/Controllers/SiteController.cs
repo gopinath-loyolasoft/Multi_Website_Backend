@@ -161,14 +161,6 @@ public class SiteController : ControllerBase
         return Ok(ApiResponse<IEnumerable<FacultyDto>>.Ok(list));
     }
 
-    [HttpGet("testimonials")]
-    [ProducesResponseType(typeof(ApiResponse<IEnumerable<TestimonialDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTestimonials([FromQuery] int limit = 10)
-    {
-        var list = await _siteService.GetPublishedTestimonialsAsync(limit);
-        return Ok(ApiResponse<IEnumerable<TestimonialDto>>.Ok(list));
-    }
-
     [HttpGet("contact")]
     [ProducesResponseType(typeof(ApiResponse<TenantSettingsDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetContactInfo()

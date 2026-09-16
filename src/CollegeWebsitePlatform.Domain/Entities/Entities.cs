@@ -351,23 +351,6 @@ public class Faculty : ISoftDeletable
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
-public class Testimonial : ISoftDeletable
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string StudentName { get; set; } = string.Empty;
-    public string? BatchYear { get; set; }
-    public string? CourseName { get; set; }
-    public string Content { get; set; } = string.Empty;
-    public string? PhotoUrl { get; set; }
-    public string? CurrentCompany { get; set; }
-    public int Rating { get; set; } = 5;
-    public bool IsPublished { get; set; } = true;
-    public int SortOrder { get; set; } = 0;
-    public bool IsDeleted { get; set; } = false;
-    public DateTime? DeletedAt { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-}
-
 public class Media : ISoftDeletable
 {
     public Guid Id { get; set; } = Guid.NewGuid();

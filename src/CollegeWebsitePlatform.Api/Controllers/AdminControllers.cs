@@ -893,63 +893,6 @@ public class FacultyController : ControllerBase
 }
 
 // -------------------------------------------------------------
-// Testimonials Controller
-// -------------------------------------------------------------
-
-[ApiController]
-[Route("api/v1/admin/testimonials")]
-[Authorize]
-[Permission(PermissionCodes.PageManage)]
-[FeatureCheck("TESTIMONIALS")]
-public class TestimonialsController : ControllerBase
-{
-    private readonly ITestimonialService _testimonialService;
-
-    public TestimonialsController(ITestimonialService testimonialService) => _testimonialService = testimonialService;
-
-    [HttpGet]
-    [ProducesResponseType(typeof(ApiResponse<PaginatedResponse<TestimonialDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTestimonials([FromQuery] PaginationFilter filter)
-    {
-        var list = await _testimonialService.GetTestimonialsPaginatedAsync(filter);
-        return Ok(ApiResponse<PaginatedResponse<TestimonialDto>>.Ok(list));
-    }
-
-    [HttpGet("{id}")]
-    [ProducesResponseType(typeof(ApiResponse<TestimonialDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTestimonialById([FromRoute] Guid id)
-    {
-        var t = await _testimonialService.GetTestimonialByIdAsync(id);
-        if (t == null) return NotFound(ApiResponse<object>.Fail("Testimonial not found"));
-        return Ok(ApiResponse<TestimonialDto>.Ok(t));
-    }
-
-    [HttpPost]
-    [ProducesResponseType(typeof(ApiResponse<TestimonialDto>), StatusCodes.Status201Created)]
-    public async Task<IActionResult> CreateTestimonial([FromBody] CreateTestimonialRequest request)
-    {
-        var created = await _testimonialService.CreateTestimonialAsync(request);
-        return Created($"/api/v1/admin/testimonials/{created.Id}", ApiResponse<TestimonialDto>.Ok(created, "Testimonial created"));
-    }
-
-    [HttpPut("{id}")]
-    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> UpdateTestimonial([FromRoute] Guid id, [FromBody] UpdateTestimonialRequest request)
-    {
-        var success = await _testimonialService.UpdateTestimonialAsync(id, request);
-        return Ok(ApiResponse<bool>.Ok(success, "Testimonial updated"));
-    }
-
-    [HttpDelete("{id}")]
-    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> DeleteTestimonial([FromRoute] Guid id)
-    {
-        var success = await _testimonialService.DeleteTestimonialAsync(id);
-        return Ok(ApiResponse<bool>.Ok(success, "Testimonial deleted"));
-    }
-}
-
-// -------------------------------------------------------------
 // Media Controller
 // -------------------------------------------------------------
 

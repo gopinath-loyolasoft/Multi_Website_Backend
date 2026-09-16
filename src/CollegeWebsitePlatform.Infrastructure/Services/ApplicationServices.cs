@@ -31,7 +31,6 @@ public class SiteService : ISiteService
     private readonly DepartmentRepository _deptRepo;
     private readonly CourseRepository _courseRepo;
     private readonly FacultyRepository _facultyRepo;
-    private readonly TestimonialRepository _testimonialRepo;
     private readonly MarqueeRepository? _marqueeRepo;
 
     public SiteService(
@@ -50,7 +49,6 @@ public class SiteService : ISiteService
         DepartmentRepository deptRepo,
         CourseRepository courseRepo,
         FacultyRepository facultyRepo,
-        TestimonialRepository testimonialRepo,
         MarqueeRepository? marqueeRepo = null,
         PreviewSessionRepository? previewRepo = null)
     {
@@ -69,7 +67,6 @@ public class SiteService : ISiteService
         _deptRepo = deptRepo;
         _courseRepo = courseRepo;
         _facultyRepo = facultyRepo;
-        _testimonialRepo = testimonialRepo;
         _marqueeRepo = marqueeRepo;
         _previewRepo = previewRepo;
     }
@@ -427,11 +424,6 @@ public class SiteService : ISiteService
     {
         var result = await _facultyRepo.GetAllPaginatedAsync(new PaginationFilter { Page = 1, PageSize = 100 }, departmentId: departmentId, activeOnly: true);
         return result.Items;
-    }
-
-    public async Task<IEnumerable<TestimonialDto>> GetPublishedTestimonialsAsync(int limit = 10)
-    {
-        return await _testimonialRepo.GetAllPublishedAsync(limit);
     }
 
     public async Task<TenantSettingsDto?> GetContactSettingsAsync() => await _settingsRepo.GetSettingsAsync();
@@ -835,8 +827,7 @@ public class SectionService : ISectionService
             ("EVENTS", "Upcoming Campus Events", "Academic conferences, symposiums, student fests, and cultural celebrations", 8),
             ("NOTICES", "Official Notice Board", "Important administrative updates, examination schedules, and circulars", 9),
             ("GALLERY", "Campus Photo Gallery", "A visual journey across our world-class laboratories, library, and campus architecture", 10),
-            ("TESTIMONIALS", "Placement Records & Testimonials", "Top corporate recruiters and success stories from our graduates", 11),
-            ("CONTACT", "Campus Helpdesk & Location", "Reach our admissions desk, administrative offices, and visit our campus", 12)
+            ("CONTACT", "Campus Helpdesk & Location", "Reach our admissions desk, administrative offices, and visit our campus", 11)
         };
 
         int maxOrder = existingSections.Any() ? existingSections.Max(s => s.SortOrder) : 0;
@@ -1410,29 +1401,6 @@ public class FacultyService : IFacultyService
     public async Task<bool> DeleteFacultyAsync(Guid id) => await _facultyRepo.DeleteAsync(id);
 }
 
-public class TestimonialService : ITestimonialService
-{
-    private readonly TestimonialRepository _testimonialRepo;
-
-    public TestimonialService(TestimonialRepository testimonialRepo) => _testimonialRepo = testimonialRepo;
-
-    public async Task<PaginatedResponse<TestimonialDto>> GetTestimonialsPaginatedAsync(PaginationFilter filter) => await _testimonialRepo.GetAllPaginatedAsync(filter);
-
-    public async Task<IEnumerable<TestimonialDto>> GetPublishedTestimonialsAsync(int limit = 10) => await _testimonialRepo.GetAllPublishedAsync(limit);
-
-    public async Task<TestimonialDto?> GetTestimonialByIdAsync(Guid id) => await _testimonialRepo.GetByIdAsync(id);
-
-    public async Task<TestimonialDto> CreateTestimonialAsync(CreateTestimonialRequest request)
-    {
-        var id = await _testimonialRepo.CreateAsync(request);
-        return (await _testimonialRepo.GetByIdAsync(id))!;
-    }
-
-    public async Task<bool> UpdateTestimonialAsync(Guid id, UpdateTestimonialRequest request) => await _testimonialRepo.UpdateAsync(id, request);
-
-    public async Task<bool> DeleteTestimonialAsync(Guid id) => await _testimonialRepo.DeleteAsync(id);
-}
-
 public class MediaService : IMediaService
 {
     private readonly MediaRepository _mediaRepo;
@@ -1531,7 +1499,6 @@ public class AdminDashboardService : IAdminDashboardService
     private readonly DepartmentRepository _deptRepo;
     private readonly CourseRepository _courseRepo;
     private readonly FacultyRepository _facultyRepo;
-    private readonly TestimonialRepository _testimonialRepo;
     private readonly MediaRepository _mediaRepo;
     private readonly ContactRepository _contactRepo;
     private readonly ITenantContext _tenantContext;
@@ -1539,7 +1506,7 @@ public class AdminDashboardService : IAdminDashboardService
     public AdminDashboardService(
         PageRepository pageRepo, NewsRepository newsRepo, EventRepository eventRepo,
         NoticeRepository noticeRepo, GalleryRepository galleryRepo, DepartmentRepository deptRepo,
-        CourseRepository courseRepo, FacultyRepository facultyRepo, TestimonialRepository testimonialRepo,
+        CourseRepository courseRepo, FacultyRepository facultyRepo,
         MediaRepository mediaRepo, ContactRepository contactRepo, ITenantContext tenantContext)
     {
         _pageRepo = pageRepo;
@@ -1550,7 +1517,6 @@ public class AdminDashboardService : IAdminDashboardService
         _deptRepo = deptRepo;
         _courseRepo = courseRepo;
         _facultyRepo = facultyRepo;
-        _testimonialRepo = testimonialRepo;
         _mediaRepo = mediaRepo;
         _contactRepo = contactRepo;
         _tenantContext = tenantContext;
@@ -1574,7 +1540,6 @@ public class AdminDashboardService : IAdminDashboardService
         var deptsResult = await _deptRepo.GetAllPaginatedAsync(new PaginationFilter { Page = 1, PageSize = 1000 });
         var coursesResult = await _courseRepo.GetAllPaginatedAsync(new PaginationFilter { Page = 1, PageSize = 1000 });
         var facultyResult = await _facultyRepo.GetAllPaginatedAsync(new PaginationFilter { Page = 1, PageSize = 1000 });
-        var testimonialsResult = await _testimonialRepo.GetAllPaginatedAsync(new PaginationFilter { Page = 1, PageSize = 1000 });
         var mediaResult = await _mediaRepo.GetAllPaginatedAsync(new MediaFilterRequest { Page = 1, PageSize = 1000 });
         var contactResult = await _contactRepo.GetAllPaginatedAsync(new PaginationFilter { Page = 1, PageSize = 1000 });
 
@@ -1593,7 +1558,6 @@ public class AdminDashboardService : IAdminDashboardService
             TotalDepartments = deptsResult.TotalCount,
             TotalCourses = coursesResult.TotalCount,
             TotalFaculty = facultyResult.TotalCount,
-            TotalTestimonials = testimonialsResult.TotalCount,
             TotalMediaFiles = mediaResult.TotalCount,
             NewContactSubmissions = contactResult.Items.Count(c => c.Status == "NEW"),
             TenantName = _tenantContext.Name,
@@ -2900,7 +2864,6 @@ public class CapabilityService : ICapabilityService
             new AdminModuleDto { Key = "faculty", Label = "Faculty Directory", Path = "/admin/faculty", Icon = "Users", RequiredFeature = "FACULTY", IsEnabled = enabledCodes.Contains("FACULTY") },
             new AdminModuleDto { Key = "gallery", Label = "Photo Gallery", Path = "/admin/gallery", Icon = "Camera", RequiredFeature = "GALLERY", IsEnabled = enabledCodes.Contains("GALLERY") },
             new AdminModuleDto { Key = "media", Label = "Media Library", Path = "/admin/media", Icon = "Folder", RequiredFeature = "MEDIA", IsEnabled = enabledCodes.Contains("MEDIA") },
-            new AdminModuleDto { Key = "testimonials", Label = "Testimonials", Path = "/admin/testimonials", Icon = "MessageSquare", RequiredFeature = "TESTIMONIALS", IsEnabled = enabledCodes.Contains("TESTIMONIALS") },
             new AdminModuleDto { Key = "contact", Label = "Contact Inquiries", Path = "/admin/contact", Icon = "Mail", RequiredFeature = "CONTACT", IsEnabled = enabledCodes.Contains("CONTACT") },
             new AdminModuleDto { Key = "stats", Label = "Key Highlights & Stats", Path = "/admin/stats", Icon = "BarChart2", RequiredFeature = "STATS", IsEnabled = enabledCodes.Contains("STATS") },
             new AdminModuleDto { Key = "quote", Label = "Leadership Quote", Path = "/admin/quote", Icon = "Quote", RequiredFeature = "QUOTE", IsEnabled = enabledCodes.Contains("QUOTE") },

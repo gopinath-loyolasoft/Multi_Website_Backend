@@ -1367,63 +1367,6 @@ public class UpdateFacultyRequest
 }
 
 // -------------------------------------------------------------
-// CMS: Testimonials
-// -------------------------------------------------------------
-
-public class TestimonialDto
-{
-    public Guid Id { get; set; }
-    public string StudentName { get; set; } = string.Empty;
-    public string? BatchYear { get; set; }
-    public string? CourseName { get; set; }
-    public string Content { get; set; } = string.Empty;
-    public string? PhotoUrl { get; set; }
-    public string? CurrentCompany { get; set; }
-    public int Rating { get; set; } = 5;
-    public bool IsPublished { get; set; }
-    public int SortOrder { get; set; }
-}
-
-public class CreateTestimonialRequest
-{
-    [Required]
-    [MaxLength(200)]
-    public string StudentName { get; set; } = string.Empty;
-
-    [MaxLength(10)]
-    public string? BatchYear { get; set; }
-
-    [MaxLength(200)]
-    public string? CourseName { get; set; }
-
-    [Required]
-    [MaxLength(2000)]
-    public string Content { get; set; } = string.Empty;
-
-    [MaxLength(2000)]
-    public string? PhotoUrl { get; set; }
-
-    [MaxLength(200)]
-    public string? CurrentCompany { get; set; }
-
-    [Range(1, 5)]
-    public int Rating { get; set; } = 5;
-    public int SortOrder { get; set; } = 0;
-}
-
-public class UpdateTestimonialRequest
-{
-    public string StudentName { get; set; } = string.Empty;
-    public string? BatchYear { get; set; }
-    public string? CourseName { get; set; }
-    public string Content { get; set; } = string.Empty;
-    public string? PhotoUrl { get; set; }
-    public string? CurrentCompany { get; set; }
-    public int Rating { get; set; } = 5;
-    public int SortOrder { get; set; }
-}
-
-// -------------------------------------------------------------
 // CMS: Media Library
 // -------------------------------------------------------------
 
@@ -1652,7 +1595,6 @@ public class AdminDashboardDto
     public int TotalDepartments { get; set; }
     public int TotalCourses { get; set; }
     public int TotalFaculty { get; set; }
-    public int TotalTestimonials { get; set; }
     public int TotalMediaFiles { get; set; }
     public int NewContactSubmissions { get; set; }
     public string TenantName { get; set; } = string.Empty;

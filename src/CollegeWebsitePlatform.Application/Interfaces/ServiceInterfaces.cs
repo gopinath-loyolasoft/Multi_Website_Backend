@@ -21,7 +21,6 @@ public interface ISiteService
     Task<IEnumerable<CourseDto>> GetActiveCoursesAsync(Guid? departmentId = null);
     Task<CourseDto?> GetCourseByIdAsync(Guid id);
     Task<IEnumerable<FacultyDto>> GetFacultyDirectoryAsync(Guid? departmentId = null);
-    Task<IEnumerable<TestimonialDto>> GetPublishedTestimonialsAsync(int limit = 10);
     Task<bool> IsFeatureEnabledAsync(string featureCode);
     Task<TenantSettingsDto?> GetContactSettingsAsync();
     Task<ContactSubmissionDto> SubmitContactFormAsync(CreateContactSubmissionRequest request);
@@ -157,15 +156,6 @@ public interface IFacultyService
     Task<FacultyDto> CreateFacultyAsync(CreateFacultyRequest request);
     Task<bool> UpdateFacultyAsync(Guid id, UpdateFacultyRequest request);
     Task<bool> DeleteFacultyAsync(Guid id);
-}
-
-public interface ITestimonialService
-{
-    Task<PaginatedResponse<TestimonialDto>> GetTestimonialsPaginatedAsync(PaginationFilter filter);
-    Task<TestimonialDto?> GetTestimonialByIdAsync(Guid id);
-    Task<TestimonialDto> CreateTestimonialAsync(CreateTestimonialRequest request);
-    Task<bool> UpdateTestimonialAsync(Guid id, UpdateTestimonialRequest request);
-    Task<bool> DeleteTestimonialAsync(Guid id);
 }
 
 public interface INoticeService

@@ -86,7 +86,6 @@ try
     builder.Services.AddScoped<DepartmentRepository>();
     builder.Services.AddScoped<CourseRepository>();
     builder.Services.AddScoped<FacultyRepository>();
-    builder.Services.AddScoped<TestimonialRepository>();
     builder.Services.AddScoped<MediaRepository>();
     builder.Services.AddScoped<TenantSettingsRepository>();
     builder.Services.AddScoped<ContactRepository>();
@@ -111,7 +110,6 @@ try
     builder.Services.AddScoped<IDepartmentService, DepartmentService>();
     builder.Services.AddScoped<ICourseService, CourseService>();
     builder.Services.AddScoped<IFacultyService, FacultyService>();
-    builder.Services.AddScoped<ITestimonialService, TestimonialService>();
     builder.Services.AddScoped<IMediaService, MediaService>();
     builder.Services.AddScoped<ISettingsService, SettingsService>();
     builder.Services.AddScoped<IContactService, ContactService>();

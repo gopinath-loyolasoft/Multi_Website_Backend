@@ -143,15 +143,4 @@ public static class TestHelpers
             Designation = "Professor",
             Qualification = "Ph.D."
         };
-
-    /// <summary>
-    /// Create a sample CreateTestimonialRequest.
-    /// </summary>
-    public static CreateTestimonialRequest CreateSampleTestimonialRequest() =>
-        new()
-        {
-            StudentName = "Test Student",
-            Content = "Great college experience",
-            Rating = 5
-        };
 }
