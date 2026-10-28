@@ -2353,6 +2353,20 @@ public class SuperAdminService : ISuperAdminService
 
                     // Drop the database
                     await masterConn.ExecuteAsync($"DROP DATABASE IF EXISTS \"{dbName}\";");
+
+                    // Clean up physical uploads folder on disk
+                    try
+                    {
+                        var tenantUploadDir = MediaService.ResolveUploadDirectory(tenant.TenantCode);
+                        if (Directory.Exists(tenantUploadDir))
+                        {
+                            Directory.Delete(tenantUploadDir, recursive: true);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[DeleteUploadFolder Warning] {ex.Message}");
+                    }
                 }
             }
             catch (Exception ex)
