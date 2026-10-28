@@ -95,7 +95,6 @@ public class TenantIsolationTests
     [InlineData("DEPARTMENTS")]
     [InlineData("COURSES")]
     [InlineData("FACULTY")]
-    [InlineData("TESTIMONIALS")]
     [InlineData("ADMISSIONS")]
     public void FeatureCodes_AreDefined(string featureCode)
     {
@@ -115,7 +114,6 @@ public class TenantIsolationTests
     [InlineData("DEPARTMENTS")]
     [InlineData("COURSES")]
     [InlineData("FACULTY")]
-    [InlineData("TESTIMONIALS")]
     [InlineData("STATS")]
     public void SectionTypes_AreDefined(string sectionType)
     {

@@ -55,6 +55,26 @@ public class AuditRepository
             whereClauses.Add("LOWER(a.entity_type) LIKE LOWER(@EntityType)");
             parameters.Add("EntityType", $"%{filter.EntityType.Trim()}%");
         }
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            whereClauses.Add("(LOWER(a.action) LIKE LOWER(@Search) OR LOWER(COALESCE(a.details, '')) LIKE LOWER(@Search) OR LOWER(a.username) LIKE LOWER(@Search))");
+            parameters.Add("Search", $"%{filter.Search.Trim()}%");
+        }
+        if (filter.FromDate.HasValue)
+        {
+            whereClauses.Add("a.created_at >= @FromDate");
+            parameters.Add("FromDate", filter.FromDate.Value.ToUniversalTime());
+        }
+        if (filter.ToDate.HasValue)
+        {
+            // Inclusive upper bound: extend to end of the selected day (23:59:59.999 UTC)
+            var to = filter.ToDate.Value.ToUniversalTime();
+            var inclusiveEnd = to.Date.AddDays(1).AddMilliseconds(-1);
+            // If the caller already sent a full timestamp (not just a date), honor it as-is when it's later in the day
+            if (to.TimeOfDay > TimeSpan.Zero)
+                inclusiveEnd = to;
+            parameters.Add("ToDate", inclusiveEnd);
+        }
 
         var whereSql = whereClauses.Count > 0 ? "WHERE " + string.Join(" AND ", whereClauses) : "";
 

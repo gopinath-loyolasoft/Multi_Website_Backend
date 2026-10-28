@@ -281,11 +281,17 @@ public interface ISuperAdminService
     Task<IEnumerable<UserDto>> GetAdminUsersAsync();
     Task<UserDto> CreateAdminUserAsync(CreateAdminUserRequest request, string currentAdminUser);
     Task<bool> UpdateAdminUserAsync(Guid id, UpdateAdminUserRequest request, string currentAdminUser);
+    Task<bool> DeleteAdminUserAsync(Guid id, string currentAdminUser);
+    Task<bool> ResetAdminUserPasswordAsync(Guid id, string newPassword, string currentAdminUser);
     Task<IEnumerable<UserTenantDto>> GetUserTenantsAsync(Guid userId);
     Task<bool> AssignUserTenantsAsync(Guid userId, AssignUserTenantsRequest request, string currentAdminUser);
 
     // Audit Logs
     Task<PaginatedResponse<AuditLogDto>> GetFilteredAuditLogsAsync(AuditLogFilterRequest filter);
+
+    // Platform Branding (persisted in platform_settings)
+    Task<PlatformBrandingDto> GetPlatformBrandingAsync();
+    Task<PlatformBrandingDto> UpdatePlatformBrandingAsync(UpdatePlatformBrandingRequest request, string currentAdminUser);
 }
 
 public interface IAuditService

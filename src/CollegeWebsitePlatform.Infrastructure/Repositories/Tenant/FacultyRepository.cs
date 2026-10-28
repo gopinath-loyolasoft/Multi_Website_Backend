@@ -4,11 +4,9 @@ using Dapper;
 
 namespace CollegeWebsitePlatform.Infrastructure.Repositories.Tenant;
 
-public class FacultyRepository
+public class FacultyRepository(ITenantDbConnectionFactory db)
 {
-    private readonly ITenantDbConnectionFactory _db;
-
-    public FacultyRepository(ITenantDbConnectionFactory db) => _db = db;
+    private readonly ITenantDbConnectionFactory _db = db;
 
     public async Task<PaginatedResponse<FacultyDto>> GetAllPaginatedAsync(PaginationFilter filter, Guid? departmentId = null, bool activeOnly = false)
     {
@@ -45,8 +43,9 @@ public class FacultyRepository
 
         var dataSql = $@"
             SELECT f.id, f.department_id AS DepartmentId, d.name AS DepartmentName, f.name, f.designation, 
-                   f.qualification, f.specialization, f.email, f.profile_image_url AS ProfileImageUrl, 
-                   f.bio, f.sort_order AS SortOrder, f.is_active AS IsActive
+                   f.qualification, f.specialization, f.qualification_details AS QualificationDetails,
+                   f.research_interests AS ResearchInterests, f.email, f.phone, f.office_room AS OfficeRoom,
+                   f.profile_image_url AS ProfileImageUrl, f.bio, f.sort_order AS SortOrder, f.is_active AS IsActive
             FROM faculty f
             INNER JOIN departments d ON d.id = f.department_id
             {whereClause}
@@ -63,8 +62,9 @@ public class FacultyRepository
         using var conn = _db.CreateConnection();
         var sql = @"
             SELECT f.id, f.department_id AS DepartmentId, d.name AS DepartmentName, f.name, f.designation, 
-                   f.qualification, f.specialization, f.email, f.profile_image_url AS ProfileImageUrl, 
-                   f.bio, f.sort_order AS SortOrder, f.is_active AS IsActive
+                   f.qualification, f.specialization, f.qualification_details AS QualificationDetails,
+                   f.research_interests AS ResearchInterests, f.email, f.phone, f.office_room AS OfficeRoom,
+                   f.profile_image_url AS ProfileImageUrl, f.bio, f.sort_order AS SortOrder, f.is_active AS IsActive
             FROM faculty f
             INNER JOIN departments d ON d.id = f.department_id
             WHERE f.id = @id AND f.is_deleted = FALSE AND d.is_deleted = FALSE;";
@@ -76,8 +76,8 @@ public class FacultyRepository
     {
         using var conn = _db.CreateConnection();
         var sql = @"
-            INSERT INTO faculty (department_id, name, designation, qualification, specialization, email, profile_image_url, bio, sort_order, is_active, created_at, updated_at)
-            VALUES (@DepartmentId, @Name, @Designation, @Qualification, @Specialization, @Email, @ProfileImageUrl, @Bio, @SortOrder, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO faculty (department_id, name, designation, qualification, specialization, qualification_details, research_interests, email, phone, office_room, profile_image_url, bio, sort_order, is_active, created_at, updated_at)
+            VALUES (@DepartmentId, @Name, @Designation, @Qualification, @Specialization, @QualificationDetails, @ResearchInterests, @Email, @Phone, @OfficeRoom, @ProfileImageUrl, @Bio, @SortOrder, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id;";
 
         return await conn.ExecuteScalarAsync<Guid>(sql, req);
@@ -89,11 +89,12 @@ public class FacultyRepository
         var sql = @"
             UPDATE faculty 
             SET department_id = @DepartmentId, name = @Name, designation = @Designation, qualification = @Qualification, 
-                specialization = @Specialization, email = @Email, profile_image_url = @ProfileImageUrl, 
+                specialization = @Specialization, qualification_details = @QualificationDetails, research_interests = @ResearchInterests,
+                email = @Email, phone = @Phone, office_room = @OfficeRoom, profile_image_url = @ProfileImageUrl, 
                 bio = @Bio, sort_order = @SortOrder, is_active = @IsActive, updated_at = CURRENT_TIMESTAMP 
             WHERE id = @id;";
 
-        var rows = await conn.ExecuteAsync(sql, new { id, req.DepartmentId, req.Name, req.Designation, req.Qualification, req.Specialization, req.Email, req.ProfileImageUrl, req.Bio, req.SortOrder, req.IsActive });
+        var rows = await conn.ExecuteAsync(sql, new { id, req.DepartmentId, req.Name, req.Designation, req.Qualification, req.Specialization, req.QualificationDetails, req.ResearchInterests, req.Email, req.Phone, req.OfficeRoom, req.ProfileImageUrl, req.Bio, req.SortOrder, req.IsActive });
         return rows > 0;
     }
 

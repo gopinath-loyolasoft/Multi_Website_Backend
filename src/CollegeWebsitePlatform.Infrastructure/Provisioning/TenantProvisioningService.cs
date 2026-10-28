@@ -338,7 +338,7 @@ public class TenantProvisioningService : ITenantProvisioningService
         try
         {
             await DatabaseMigrator.MigrateTenantTablesAsync(tenant.DbConnectionString);
-            await _dbRegistryRepo.UpdateStatusAsync(tenantId, "HEALTHY", "V8");
+            await _dbRegistryRepo.UpdateStatusAsync(tenantId, "HEALTHY", "V11");
             await _auditRepo.LogAsync(null, performedBy, tenantId, "RUN_MIGRATIONS",
                 "TenantDatabase", tenantId.ToString(), $"Migrations run on {registry.DatabaseName}", null);
             return true;
@@ -435,8 +435,7 @@ public class TenantProvisioningService : ITenantProvisioningService
                 new { SecType = "EVENTS", Title = "Upcoming Campus Events", Subtitle = "Academic conferences, symposiums, student fests, and cultural celebrations", Sort = 8 },
                 new { SecType = "NOTICES", Title = "Official Notice Board", Subtitle = "Important administrative updates, examination schedules, and circulars", Sort = 9 },
                 new { SecType = "GALLERY", Title = "Campus Photo Gallery", Subtitle = "A visual journey across our world-class laboratories, library, and campus architecture", Sort = 10 },
-                new { SecType = "TESTIMONIALS", Title = "Student Testimonials & Stories", Subtitle = "Inspiring experiences and success stories from our graduates", Sort = 11 },
-                new { SecType = "CONTACT", Title = "Campus Helpdesk & Location", Subtitle = "Reach our admissions desk, administrative offices, and visit our campus", Sort = 12 }
+                new { SecType = "CONTACT", Title = "Campus Helpdesk & Location", Subtitle = "Reach our admissions desk, administrative offices, and visit our campus", Sort = 11 }
             };
 
             foreach (var s in defaultSections)

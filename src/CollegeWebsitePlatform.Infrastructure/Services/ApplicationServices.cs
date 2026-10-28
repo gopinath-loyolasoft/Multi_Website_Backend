@@ -10,6 +10,7 @@ using CollegeWebsitePlatform.Infrastructure.Repositories.Platform;
 using CollegeWebsitePlatform.Infrastructure.Repositories.Tenant;
 using CollegeWebsitePlatform.Infrastructure.Services;
 using Dapper;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace CollegeWebsitePlatform.Application.Services;
@@ -175,6 +176,7 @@ public class SiteService : ISiteService
         }
 
         var statsList = new List<StatItemDto>();
+        StatsSectionSettingsDto? statsSettingsDto = null;
         QuoteDto? quoteDto = null;
         if (!string.IsNullOrWhiteSpace(_tenantContext.DbConnectionString))
         {
@@ -202,6 +204,21 @@ public class SiteService : ISiteService
                     SortOrder = r.sort_order,
                     CreatedAt = r.created_at
                 }).ToList();
+
+                var ssRow = await tConn.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT id, badge, title, subtitle, is_active, updated_at FROM stats_settings LIMIT 1;");
+                if (ssRow != null)
+                {
+                    statsSettingsDto = new StatsSectionSettingsDto
+                    {
+                        Id = ssRow.id,
+                        Badge = ssRow.badge ?? "Key Metrics & Institutional Record",
+                        Title = ssRow.title ?? "Campus at a Glance",
+                        Subtitle = ssRow.subtitle ?? "Excellence in Numbers",
+                        IsActive = ssRow.is_active ?? true,
+                        UpdatedAt = ssRow.updated_at ?? DateTime.UtcNow
+                    };
+                }
 
                 var qRow = await tConn.QueryFirstOrDefaultAsync<dynamic>(
                     "SELECT id, quote_text, author_name, designation, author_image_url, sub_text, is_active FROM quote_settings WHERE is_active = TRUE LIMIT 1;");
@@ -238,6 +255,7 @@ public class SiteService : ISiteService
             Banners = banners,
             Marquee = marqueeDto,
             Stats = statsList,
+            StatsSettings = statsSettingsDto,
             Quote = quoteDto
         };
     }
@@ -488,7 +506,10 @@ public class PageService : IPageService
 
     public async Task<PageDto> CreatePageAsync(CreatePageRequest request, string currentUser)
     {
-        var cleanSlug = request.Slug.ToLowerInvariant().Trim().Trim('/');
+        var cleanSlug = !string.IsNullOrWhiteSpace(request.Slug)
+            ? request.Slug.ToLowerInvariant().Trim().Trim('/')
+            : CollegeWebsitePlatform.Domain.Common.SlugHelper.Slugify(request.Title);
+
         var isPublished = request.IsPublished ?? false;
         var page = new Page
         {
@@ -509,7 +530,12 @@ public class PageService : IPageService
     public async Task<PageDto> UpdatePageAsync(Guid id, UpdatePageRequest request, string currentUser)
     {
         var existing = await _pageRepo.GetByIdAsync(id);
-        var cleanSlug = request.Slug.ToLowerInvariant().Trim().Trim('/');
+        var cleanSlug = !string.IsNullOrWhiteSpace(request.Slug)
+            ? request.Slug.ToLowerInvariant().Trim().Trim('/')
+            : (existing != null && !string.IsNullOrWhiteSpace(existing.Slug))
+                ? existing.Slug
+                : CollegeWebsitePlatform.Domain.Common.SlugHelper.Slugify(request.Title);
+
         if (existing != null && existing.Slug.Equals("home", StringComparison.OrdinalIgnoreCase) && !cleanSlug.Equals("home", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("The home page slug is protected and cannot be changed.");
@@ -876,7 +902,6 @@ public class SectionService : ISectionService
             new() { Code = "DEPARTMENTS", Name = "Academic Departments", Description = "Department cards with schools, degree pathways, and HOD contact info", Icon = "Building2" },
             new() { Code = "FACULTY", Name = "Faculty Directory", Description = "Distinguished faculty directory, professor profiles, and research areas", Icon = "Users" },
             new() { Code = "GALLERY", Name = "Photo & Video Gallery", Description = "Interactive photo album grid with lightbox modal view", Icon = "Camera" },
-            new() { Code = "TESTIMONIALS", Name = "Student & Alumni Reviews", Description = "Student feedback, alumni success stories, and corporate employer ratings", Icon = "MessageSquare" },
             new() { Code = "CALL_TO_ACTION", Name = "Call to Action (CTA)", Description = "High-impact conversion block encouraging online admission applications", Icon = "Send" },
             new() { Code = "VIDEO", Name = "Video Section", Description = "Embedded YouTube, Vimeo, or hosted video tour with custom thumbnail", Icon = "Video" },
             new() { Code = "LOGO_GRID", Name = "Accreditations & Recruiters", Description = "NAAC A++, NBA, NIRF ranking logos and top corporate placement partners", Icon = "CheckCircle" },
@@ -1191,10 +1216,14 @@ public class NewsService : INewsService
 
     public async Task<News> CreateNewsAsync(CreateNewsRequest request)
     {
+        var slug = !string.IsNullOrWhiteSpace(request.Slug)
+            ? request.Slug.ToLowerInvariant().Trim()
+            : CollegeWebsitePlatform.Domain.Common.SlugHelper.Slugify(request.Title);
+
         var news = new News
         {
             Title = request.Title,
-            Slug = request.Slug.ToLowerInvariant().Trim(),
+            Slug = slug,
             Summary = request.Summary,
             Content = request.Content,
             ImageUrl = request.ImageUrl,
@@ -1207,11 +1236,15 @@ public class NewsService : INewsService
 
     public async Task<News> UpdateNewsAsync(Guid id, UpdateNewsRequest request)
     {
+        var slug = !string.IsNullOrWhiteSpace(request.Slug)
+            ? request.Slug.ToLowerInvariant().Trim()
+            : CollegeWebsitePlatform.Domain.Common.SlugHelper.Slugify(request.Title);
+
         var news = new News
         {
             Id = id,
             Title = request.Title,
-            Slug = request.Slug.ToLowerInvariant().Trim(),
+            Slug = slug,
             Summary = request.Summary,
             Content = request.Content,
             ImageUrl = request.ImageUrl
@@ -1418,15 +1451,55 @@ public class MediaService : IMediaService
 
     public async Task<MediaDto?> GetMediaByIdAsync(Guid id) => await _mediaRepo.GetByIdAsync(id);
 
+    public static string ResolveUploadDirectory(string tenantCode)
+    {
+        // 1. Check current directory (standard dotnet run in development)
+        var currentDirWwwRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        string webRoot;
+
+        if (Directory.Exists(currentDirWwwRoot))
+        {
+            webRoot = currentDirWwwRoot;
+        }
+        else
+        {
+            // 2. Check AppContext.BaseDirectory (reliable on IIS / production release publish)
+            var baseDirWwwRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+            if (Directory.Exists(baseDirWwwRoot))
+            {
+                webRoot = baseDirWwwRoot;
+            }
+            else
+            {
+                try
+                {
+                    if (!Directory.Exists(currentDirWwwRoot)) Directory.CreateDirectory(currentDirWwwRoot);
+                    webRoot = currentDirWwwRoot;
+                }
+                catch
+                {
+                    if (!Directory.Exists(baseDirWwwRoot)) Directory.CreateDirectory(baseDirWwwRoot);
+                    webRoot = baseDirWwwRoot;
+                }
+            }
+        }
+
+        var tenantDir = Path.Combine(webRoot, "uploads", (string.IsNullOrWhiteSpace(tenantCode) ? "shared" : tenantCode).ToLowerInvariant().Trim());
+        if (!Directory.Exists(tenantDir))
+        {
+            Directory.CreateDirectory(tenantDir);
+        }
+
+        return tenantDir;
+    }
+
     public async Task<MediaDto> UploadMediaAsync(Stream fileStream, string fileName, string contentType, long fileSizeBytes, string? altText, string currentUser)
     {
         var cleanFileName = Path.GetFileName(fileName);
-        var extension = Path.GetExtension(cleanFileName).ToLowerInvariant();
 
-        // Tenant-specific upload path: wwwroot/uploads/{tenantCode}/
+        // Dynamic tenant-specific upload path: wwwroot/uploads/{tenantCode}/
         var tenantCode = _tenantContext.IsResolved ? _tenantContext.TenantCode.ToLowerInvariant() : "shared";
-        var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", tenantCode);
-        if (!Directory.Exists(uploadDir)) Directory.CreateDirectory(uploadDir);
+        var uploadDir = ResolveUploadDirectory(tenantCode);
 
         var uniqueFileName = $"{Guid.NewGuid()}_{cleanFileName}";
         var filePath = Path.Combine(uploadDir, uniqueFileName);
@@ -1598,6 +1671,7 @@ public class AuthService : IAuthService
     private readonly PermissionRepository _permRepo;
     private readonly UserTenantRepository _userTenantRepo;
     private readonly DomainRepository _domainRepo;
+    private readonly AuditRepository _auditRepo;
 
     public AuthService(
         UserRepository userRepo,
@@ -1606,7 +1680,8 @@ public class AuthService : IAuthService
         JwtTokenService jwtService,
         PermissionRepository permRepo,
         UserTenantRepository userTenantRepo,
-        DomainRepository domainRepo)
+        DomainRepository domainRepo,
+        AuditRepository auditRepo)
     {
         _userRepo = userRepo;
         _tenantRepo = tenantRepo;
@@ -1615,6 +1690,7 @@ public class AuthService : IAuthService
         _permRepo = permRepo;
         _userTenantRepo = userTenantRepo;
         _domainRepo = domainRepo;
+        _auditRepo = auditRepo;
     }
 
     public async Task<LoginResponse?> LoginAsync(string username, string password)
@@ -1625,12 +1701,19 @@ public class AuthService : IAuthService
         var isValid = BCrypt.Net.BCrypt.Verify(password, user.PasswordHash);
         if (!isValid) return null;
 
-        // Load tenant code
+        // Load tenant code + enforce tenant lifecycle: suspended/deleted colleges cannot login
         string tenantCode = "SUPERADMIN";
         if (user.TenantId.HasValue)
         {
             var tenant = await _tenantRepo.GetByIdAsync(user.TenantId.Value);
-            tenantCode = tenant?.TenantCode ?? "UNKNOWN";
+            if (tenant == null || !string.Equals(tenant.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            {
+                var tenantRef = tenant?.TenantCode ?? user.TenantId.Value.ToString();
+                await _auditRepo.LogAsync(user.Username, "LOGIN_BLOCKED_TENANT", "USER", user.Id.ToString(),
+                    $"Login blocked: college '{tenantRef}' is {tenant?.Status ?? "DELETED"}.", user.TenantId);
+                return null;
+            }
+            tenantCode = tenant.TenantCode;
         }
 
         // Load permissions for JWT claim
@@ -1670,7 +1753,13 @@ public class AuthService : IAuthService
         if (user.TenantId.HasValue)
         {
             var tenant = await _tenantRepo.GetByIdAsync(user.TenantId.Value);
-            tenantCode = tenant?.TenantCode ?? "UNKNOWN";
+            if (tenant == null || !string.Equals(tenant.Status, "ACTIVE", StringComparison.OrdinalIgnoreCase))
+            {
+                // Suspended/deleted college: revoke the presented refresh token and deny renewal
+                await _refreshRepo.RevokeAsync(refreshToken);
+                return null;
+            }
+            tenantCode = tenant.TenantCode;
         }
 
         // Reload permissions for the new token
@@ -1769,6 +1858,7 @@ public class SuperAdminService : ISuperAdminService
     private readonly AuditRepository _auditRepo;
     private readonly IPlatformDbConnectionFactory _platformDb;
     private readonly IDnsVerificationService _dnsService;
+    private readonly IConfiguration _configuration;
 
     public SuperAdminService(
         TenantRepository tenantRepo,
@@ -1783,7 +1873,8 @@ public class SuperAdminService : ISuperAdminService
         UserTenantRepository userTenantRepo,
         AuditRepository auditRepo,
         IPlatformDbConnectionFactory platformDb,
-        IDnsVerificationService dnsService)
+        IDnsVerificationService dnsService,
+        IConfiguration configuration)
     {
         _tenantRepo = tenantRepo;
         _domainRepo = domainRepo;
@@ -1798,6 +1889,24 @@ public class SuperAdminService : ISuperAdminService
         _auditRepo = auditRepo;
         _platformDb = platformDb;
         _dnsService = dnsService;
+        _configuration = configuration;
+    }
+
+    /// <summary>Master (postgres) connection string for provisioning/dropping tenant databases — from configuration, never hardcoded.</summary>
+    private string MasterConnectionString =>
+        _configuration["Platform:MasterConnectionString"]
+        ?? throw new InvalidOperationException("Platform:MasterConnectionString is not configured (appsettings.json).");
+
+    /// <summary>Platform control-plane database connection string — from configuration, never hardcoded.</summary>
+    private string PlatformConnectionString =>
+        _configuration.GetConnectionString("PlatformConnection")
+        ?? throw new InvalidOperationException("ConnectionStrings:PlatformConnection is not configured (appsettings.json).");
+
+    /// <summary>Builds a tenant connection string that inherits host/port/credentials from the configured master connection string.</summary>
+    private string BuildTenantConnectionString(string dbName)
+    {
+        var master = new NpgsqlConnectionStringBuilder(MasterConnectionString);
+        return $"Host={master.Host};Port={master.Port};Database={dbName};Username={master.Username};Password={master.Password};Include Error Detail=true";
     }
 
     public async Task<SuperAdminDashboardStatsDto> GetDashboardStatsAsync()
@@ -2014,7 +2123,7 @@ public class SuperAdminService : ISuperAdminService
         var dbName = !string.IsNullOrWhiteSpace(request.DatabaseName)
             ? request.DatabaseName.Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_")
             : $"college_{tenantCode.ToLowerInvariant()}_database";
-        var masterCs = "Host=localhost;Port=5433;Database=postgres;Username=postgres;Password=root;Include Error Detail=true";
+        var masterCs = MasterConnectionString;
         var templateCode = !string.IsNullOrWhiteSpace(request.TemplateCode) ? request.TemplateCode.Trim().ToUpperInvariant() : "ENGINEERING_MODERN";
 
         // Auto-assign default theme matching templateCode if not explicitly set
@@ -2031,9 +2140,19 @@ public class SuperAdminService : ISuperAdminService
             themeId = allThemes.FirstOrDefault(t => t.Code == targetThemeCode)?.Id ?? allThemes.FirstOrDefault()?.Id;
         }
 
-        // 1. Create Tenant Record
-        var initialCs = $"Host=localhost;Port=5433;Database={dbName};Username=postgres;Password=root;Include Error Detail=true";
+        // 1. Create Tenant Record (host/port/credentials inherited from configured master connection string)
+        var initialCs = BuildTenantConnectionString(dbName);
         var tenantId = await _tenantRepo.CreateAsync(tenantCode, request.Name.Trim(), slug, initialCs, themeId, templateCode, request.LoginTemplate ?? "template2", "ACTIVE");
+
+        // Pre-create dynamic upload directory for this college on disk
+        try
+        {
+            MediaService.ResolveUploadDirectory(tenantCode);
+        }
+        catch
+        {
+            // Non-blocking
+        }
 
         // 2. Create Domain Record (Production primary domain + local dev alias if needed)
         var domainName = request.PrimaryDomain.Trim().ToLowerInvariant();
@@ -2056,13 +2175,12 @@ public class SuperAdminService : ISuperAdminService
         }
 
         // 3. Provision physical PostgreSQL database & run tenant migrations (V1..V8)
-        var platformCs = "Host=localhost;Port=5433;Database=dinamic_college_website;Username=postgres;Password=root;Include Error Detail=true";
-        var actualTenantCs = await DatabaseMigrator.ProvisionTenantDatabaseAsync(tenantCode, dbName, masterCs, platformCs, tenantId, templateCode, request.Name.Trim());
+        var actualTenantCs = await DatabaseMigrator.ProvisionTenantDatabaseAsync(tenantCode, dbName, masterCs, PlatformConnectionString, tenantId, templateCode, request.Name.Trim());
 
         // 4. Configure features
         var defaultFeatures = request.EnabledFeatures != null && request.EnabledFeatures.Count > 0
             ? request.EnabledFeatures
-            : new List<string> { "PAGES", "NEWS", "EVENTS", "BANNERS", "GALLERY", "DEPARTMENTS", "COURSES", "FACULTY", "TESTIMONIALS", "ADMISSIONS" };
+            : new List<string> { "PAGES", "NEWS", "EVENTS", "BANNERS", "GALLERY", "DEPARTMENTS", "COURSES", "FACULTY", "ADMISSIONS" };
 
         var allFeatures = await _featureRepo.GetAllFeaturesAsync();
         foreach (var f in allFeatures)
@@ -2109,7 +2227,14 @@ public class SuperAdminService : ISuperAdminService
 
     public async Task<TenantDto> UpdateCollegeAsync(Guid id, UpdateCollegeRequest request, string currentAdminUser)
     {
-        await _tenantRepo.UpdateAsync(id, request.Name.Trim(), request.Slug.Trim().ToLowerInvariant(), request.DefaultThemeId, request.LoginTemplate?.Trim().ToLowerInvariant());
+        await _tenantRepo.UpdateAsync(
+            id, 
+            request.Name.Trim(), 
+            request.Slug.Trim().ToLowerInvariant(), 
+            request.DefaultThemeId, 
+            request.LoginTemplate?.Trim().ToLowerInvariant(),
+            request.TemplateCode?.Trim().ToUpperInvariant()
+        );
 
         // Update college administrator password if provided
         if (!string.IsNullOrWhiteSpace(request.AdminPassword))
@@ -2131,17 +2256,18 @@ public class SuperAdminService : ISuperAdminService
             {
                 using var tenantConn = new NpgsqlConnection(updated.DbConnectionString);
                 await tenantConn.OpenAsync();
-                if (!string.IsNullOrWhiteSpace(request.LoginTemplate))
-                {
-                    await tenantConn.ExecuteAsync(@"
-                        UPDATE tenant_settings 
-                        SET site_name = @name, login_template = @loginTemplate, updated_at = CURRENT_TIMESTAMP;", 
-                        new { name = request.Name.Trim(), loginTemplate = request.LoginTemplate.Trim().ToLowerInvariant() });
-                }
-                else
-                {
-                    await tenantConn.ExecuteAsync("UPDATE tenant_settings SET site_name = @name, updated_at = CURRENT_TIMESTAMP;", new { name = request.Name.Trim() });
-                }
+                
+                await tenantConn.ExecuteAsync(@"
+                    UPDATE tenant_settings 
+                    SET site_name = @name, 
+                        login_template = COALESCE(@loginTemplate, login_template),
+                        template_code = COALESCE(@templateCode, template_code),
+                        updated_at = CURRENT_TIMESTAMP;", 
+                    new { 
+                        name = request.Name.Trim(), 
+                        loginTemplate = request.LoginTemplate?.Trim().ToLowerInvariant(),
+                        templateCode = request.TemplateCode?.Trim().ToUpperInvariant()
+                    });
             }
             catch { /* ignore if tenant DB offline */ }
         }
@@ -2215,8 +2341,7 @@ public class SuperAdminService : ISuperAdminService
                     && !dbName.Equals("postgres", StringComparison.OrdinalIgnoreCase) 
                     && !dbName.Equals("dinamic_college_website", StringComparison.OrdinalIgnoreCase))
                 {
-                    var masterCs = "Host=localhost;Port=5433;Database=postgres;Username=postgres;Password=root;Include Error Detail=true";
-                    using var masterConn = new NpgsqlConnection(masterCs);
+                    using var masterConn = new NpgsqlConnection(MasterConnectionString);
                     await masterConn.OpenAsync();
 
                     // Terminate all active client connections to this tenant database
@@ -2358,10 +2483,8 @@ public class SuperAdminService : ISuperAdminService
         if (tenant == null) throw new InvalidOperationException("Tenant not found");
 
         var dbName = $"college_{tenant.TenantCode.ToLowerInvariant()}";
-        var masterCs = "Host=localhost;Port=5433;Database=postgres;Username=postgres;Password=root;Include Error Detail=true";
-        var platformCs = "Host=localhost;Port=5433;Database=dinamic_college_website;Username=postgres;Password=root;Include Error Detail=true";
 
-        await DatabaseMigrator.ProvisionTenantDatabaseAsync(tenant.TenantCode, dbName, masterCs, platformCs, tenantId, tenant.TemplateCode ?? "ENGINEERING_MODERN", tenant.Name.Trim());
+        await DatabaseMigrator.ProvisionTenantDatabaseAsync(tenant.TenantCode, dbName, MasterConnectionString, PlatformConnectionString, tenantId, tenant.TemplateCode ?? "ENGINEERING_MODERN", tenant.Name.Trim());
         await _auditRepo.LogAsync(currentAdminUser, "PROVISION_DATABASE", "DATABASE", dbName, $"Re-provisioned database '{dbName}' for tenant '{tenant.TenantCode}'", tenantId);
 
         return await _dbRepo.GetByTenantIdAsync(tenantId) ?? new DatabaseRegistryDto();
@@ -2388,7 +2511,8 @@ public class SuperAdminService : ISuperAdminService
             status = "CONNECTION_ERROR";
         }
 
-        await _dbRepo.UpsertAsync(tenantId, dbName, "localhost", 5433, "postgres", status, "V8");
+        var master = new NpgsqlConnectionStringBuilder(MasterConnectionString);
+        await _dbRepo.UpsertAsync(tenantId, dbName, master.Host ?? "localhost", master.Port, master.Username ?? "postgres", status, dbRecord?.CurrentMigrationVersion ?? "V8");
         await _auditRepo.LogAsync(currentAdminUser, "VERIFY_DATABASE", "DATABASE", dbName, $"Verified database health: {status}", tenantId);
 
         return await _dbRepo.GetByTenantIdAsync(tenantId) ?? new DatabaseRegistryDto();
@@ -2436,7 +2560,8 @@ public class SuperAdminService : ISuperAdminService
         if (tenant == null) throw new InvalidOperationException("Tenant not found");
 
         await DatabaseMigrator.MigrateTenantTablesAsync(tenant.DbConnectionString);
-        await _dbRepo.UpsertAsync(tenantId, $"college_{tenant.TenantCode.ToLower()}", "localhost", 5433, "postgres", "HEALTHY", "V8");
+        var migrateMaster = new NpgsqlConnectionStringBuilder(MasterConnectionString);
+        await _dbRepo.UpsertAsync(tenantId, $"college_{tenant.TenantCode.ToLower()}", migrateMaster.Host ?? "localhost", migrateMaster.Port, migrateMaster.Username ?? "postgres", "HEALTHY", "V8");
         await _auditRepo.LogAsync(currentAdminUser, "RUN_MIGRATION", "DATABASE", tenant.TenantCode, $"Executed schema migrations V1..V8 on college_{tenant.TenantCode.ToLower()}", tenantId);
 
         return await _dbRepo.GetByTenantIdAsync(tenantId) ?? new DatabaseRegistryDto();
@@ -2699,6 +2824,42 @@ public class SuperAdminService : ISuperAdminService
         return success;
     }
 
+    public async Task<bool> DeleteAdminUserAsync(Guid id, string currentAdminUser)
+    {
+        var user = await _userRepo.GetByIdAsync(id);
+        if (user == null) return false;
+
+        // Safeguard: an administrator can never delete their own account
+        if (string.Equals(user.Username, currentAdminUser, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("You cannot delete your own administrator account while signed in.");
+
+        var success = await _userRepo.DeleteAsync(id);
+        if (success)
+        {
+            // Clear tenant mappings so orphaned assignments do not linger
+            await _userTenantRepo.AssignTenantsAsync(id, new List<Guid>(), null);
+            await _auditRepo.LogAsync(currentAdminUser, "DELETE_USER", "USER", id.ToString(), $"Deleted administrator '{user.Username}' (role: {user.Role})", user.TenantId);
+        }
+        return success;
+    }
+
+    public async Task<bool> ResetAdminUserPasswordAsync(Guid id, string newPassword, string currentAdminUser)
+    {
+        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
+            throw new InvalidOperationException("New password must be at least 6 characters long.");
+
+        var user = await _userRepo.GetByIdAsync(id);
+        if (user == null) return false;
+
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(newPassword, 12);
+        var success = await _userRepo.UpdatePasswordAsync(id, passwordHash);
+        if (success)
+        {
+            await _auditRepo.LogAsync(currentAdminUser, "RESET_USER_PASSWORD", "USER", id.ToString(), $"Reset password for administrator '{user.Username}'", user.TenantId);
+        }
+        return success;
+    }
+
     public async Task<IEnumerable<UserTenantDto>> GetUserTenantsAsync(Guid userId) => await _userTenantRepo.GetByUserIdAsync(userId);
 
     public async Task<bool> AssignUserTenantsAsync(Guid userId, AssignUserTenantsRequest request, string currentAdminUser)
@@ -2715,6 +2876,62 @@ public class SuperAdminService : ISuperAdminService
     public async Task<PaginatedResponse<AuditLogDto>> GetFilteredAuditLogsAsync(AuditLogFilterRequest filter)
     {
         return await _auditRepo.GetFilteredAsync(filter);
+    }
+
+    // Platform Branding (persisted in platform_settings key-value store)
+    public async Task<PlatformBrandingDto> GetPlatformBrandingAsync()
+    {
+        var defaults = new PlatformBrandingDto();
+        var result = new PlatformBrandingDto();
+
+        try
+        {
+            using var conn = _platformDb.CreateConnection();
+            var rows = await conn.QueryAsync<dynamic>(
+                "SELECT setting_key, setting_value FROM platform_settings WHERE setting_key LIKE 'platform_branding.%';");
+
+            var map = rows.ToDictionary(
+                r => (string)r.setting_key,
+                r => (string)r.setting_value);
+
+            result.PlatformName = map.TryGetValue("platform_branding.name", out var n) ? n : defaults.PlatformName;
+            result.PlatformSubtitle = map.TryGetValue("platform_branding.subtitle", out var s) ? s : defaults.PlatformSubtitle;
+            result.LogoUrl = map.TryGetValue("platform_branding.logo", out var l) ? l : defaults.LogoUrl;
+            result.FaviconUrl = map.TryGetValue("platform_branding.favicon", out var f) ? f : defaults.FaviconUrl;
+        }
+        catch
+        {
+            // Table may not exist on older installs — fall back to defaults
+            return defaults;
+        }
+
+        return result;
+    }
+
+    public async Task<PlatformBrandingDto> UpdatePlatformBrandingAsync(UpdatePlatformBrandingRequest request, string currentAdminUser)
+    {
+        var entries = new (string Key, string Value)[]
+        {
+            ("platform_branding.name", request.PlatformName.Trim()),
+            ("platform_branding.subtitle", request.PlatformSubtitle.Trim()),
+            ("platform_branding.logo", request.LogoUrl.Trim()),
+            ("platform_branding.favicon", string.IsNullOrWhiteSpace(request.FaviconUrl) ? request.LogoUrl.Trim() : request.FaviconUrl.Trim())
+        };
+
+        using var conn = _platformDb.CreateConnection();
+        foreach (var (key, value) in entries)
+        {
+            await conn.ExecuteAsync(@"
+                INSERT INTO platform_settings (setting_key, setting_value, updated_at)
+                VALUES (@key, @value, CURRENT_TIMESTAMP)
+                ON CONFLICT (setting_key) DO UPDATE SET setting_value = @value, updated_at = CURRENT_TIMESTAMP;",
+                new { key, value });
+        }
+
+        await _auditRepo.LogAsync(currentAdminUser, "UPDATE_PLATFORM_BRANDING", "PLATFORM_SETTINGS", "platform_branding",
+            $"Updated platform branding: name='{request.PlatformName.Trim()}', subtitle='{request.PlatformSubtitle.Trim()}'");
+
+        return await GetPlatformBrandingAsync();
     }
 }
 
@@ -2751,10 +2968,14 @@ public class NoticeService : INoticeService
 
     public async Task<Notice> CreateNoticeAsync(CreateNoticeRequest request)
     {
+        var slug = !string.IsNullOrWhiteSpace(request.Slug)
+            ? request.Slug.ToLowerInvariant().Trim()
+            : CollegeWebsitePlatform.Domain.Common.SlugHelper.Slugify(request.Title);
+
         var notice = new Notice
         {
             Title = request.Title,
-            Slug = request.Slug.ToLowerInvariant().Trim(),
+            Slug = slug,
             Summary = request.Summary,
             Content = request.Content,
             PdfUrl = request.PdfUrl,
@@ -2770,11 +2991,15 @@ public class NoticeService : INoticeService
 
     public async Task<Notice> UpdateNoticeAsync(Guid id, UpdateNoticeRequest request)
     {
+        var slug = !string.IsNullOrWhiteSpace(request.Slug)
+            ? request.Slug.ToLowerInvariant().Trim()
+            : CollegeWebsitePlatform.Domain.Common.SlugHelper.Slugify(request.Title);
+
         var notice = new Notice
         {
             Id = id,
             Title = request.Title,
-            Slug = request.Slug.ToLowerInvariant().Trim(),
+            Slug = slug,
             Summary = request.Summary,
             Content = request.Content,
             PdfUrl = request.PdfUrl,

@@ -73,6 +73,21 @@ public class TenantRepository
         return await conn.QueryFirstOrDefaultAsync<TenantEntity>(sql, new { tenantCode });
     }
 
+    public async Task<TenantEntity?> GetBySlugAsync(string slug)
+    {
+        using var conn = _platformDb.CreateConnection();
+        var sql = @"
+            SELECT id, tenant_code AS TenantCode, name, slug, db_connection_string AS DbConnectionString,
+                   status, default_theme_id AS DefaultThemeId, template_code AS TemplateCode,
+                   COALESCE(login_template, 'template2') AS LoginTemplate, provisioning_status AS ProvisioningStatus,
+                   is_deleted AS IsDeleted, deleted_at AS DeletedAt,
+                   created_at AS CreatedAt, updated_at AS UpdatedAt
+            FROM tenants
+            WHERE LOWER(slug) = LOWER(@slug) AND is_deleted = FALSE;";
+
+        return await conn.QueryFirstOrDefaultAsync<TenantEntity>(sql, new { slug });
+    }
+
     public async Task<Guid> CreateAsync(string tenantCode, string name, string slug, string dbConnectionString, Guid? defaultThemeId, string templateCode = "ENGINEERING_MODERN", string loginTemplate = "template2", string status = "ACTIVE")
     {
         using var conn = _platformDb.CreateConnection();
@@ -84,17 +99,18 @@ public class TenantRepository
         return await conn.ExecuteScalarAsync<Guid>(sql, new { tenantCode, name, slug, dbConnectionString, defaultThemeId, templateCode, loginTemplate, status });
     }
 
-    public async Task<bool> UpdateAsync(Guid id, string name, string slug, Guid? defaultThemeId, string? loginTemplate = null)
+    public async Task<bool> UpdateAsync(Guid id, string name, string slug, Guid? defaultThemeId, string? loginTemplate = null, string? templateCode = null)
     {
         using var conn = _platformDb.CreateConnection();
         var sql = @"
             UPDATE tenants 
             SET name = @name, slug = LOWER(@slug), default_theme_id = @defaultThemeId,
                 login_template = COALESCE(@loginTemplate, login_template, 'template2'),
+                template_code = COALESCE(@templateCode, template_code, 'ENGINEERING_MODERN'),
                 updated_at = CURRENT_TIMESTAMP 
             WHERE id = @id;";
 
-        var rows = await conn.ExecuteAsync(sql, new { id, name, slug, defaultThemeId, loginTemplate });
+        var rows = await conn.ExecuteAsync(sql, new { id, name, slug, defaultThemeId, loginTemplate, templateCode });
         return rows > 0;
     }
 

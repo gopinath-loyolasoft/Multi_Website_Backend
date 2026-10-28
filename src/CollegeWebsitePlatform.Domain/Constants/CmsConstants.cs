@@ -49,6 +49,7 @@ public static class FeatureCodes
     public const string Pages        = "PAGES";
     public const string Sections     = "SECTIONS";
     public const string Menus        = "MENUS";
+    public const string Themes       = "THEMES";
     public const string Banners      = "BANNERS";
     public const string Marquee      = "MARQUEE";
     public const string News         = "NEWS";
@@ -62,14 +63,13 @@ public static class FeatureCodes
     public const string Contact      = "CONTACT";
     public const string Stats        = "STATS";
     public const string Quote        = "QUOTE";
-    public const string Placements   = "PLACEMENTS";
     public const string Admissions   = "ADMISSIONS";
 
     public static readonly IReadOnlyList<string> All = new[]
     {
-        Pages, Sections, Menus, Banners, Marquee,
+        Pages, Sections, Menus, Themes, Banners, Marquee,
         News, Events, Notices, Departments, Courses,
         Faculty, Gallery, Media, Contact,
-        Stats, Quote, Placements, Admissions
+        Stats, Quote, Admissions
     };
 }

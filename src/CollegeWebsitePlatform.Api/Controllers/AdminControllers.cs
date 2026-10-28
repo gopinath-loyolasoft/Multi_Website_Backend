@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using CollegeWebsitePlatform.Api.Middleware;
 
-namespace CollegeWebsitePlatform.Api.Controllers.Admin;
+namespace CollegeWebsitePlatform.Api.Controllers;
 
 public class UploadMediaRequest
 {
@@ -1321,6 +1321,86 @@ public class StatsAdminController : ControllerBase
             new { id, isActive = request.Active });
         return Ok(ApiResponse<bool>.Ok(affected > 0, "Visibility updated"));
     }
+
+    [HttpGet("settings")]
+    [ProducesResponseType(typeof(ApiResponse<StatsSectionSettingsDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetSectionSettings()
+    {
+        using var conn = new NpgsqlConnection(_tenantContext.DbConnectionString);
+        await conn.OpenAsync();
+        var row = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+            SELECT id, badge, title, subtitle, is_active, updated_at 
+            FROM stats_settings 
+            LIMIT 1;");
+
+        var dto = row != null
+            ? new StatsSectionSettingsDto
+            {
+                Id = row.id,
+                Badge = row.badge ?? "Key Metrics & Institutional Record",
+                Title = row.title ?? "Campus at a Glance",
+                Subtitle = row.subtitle ?? "Excellence in Numbers",
+                IsActive = row.is_active ?? true,
+                UpdatedAt = row.updated_at ?? DateTime.UtcNow
+            }
+            : new StatsSectionSettingsDto();
+
+        return Ok(ApiResponse<StatsSectionSettingsDto>.Ok(dto));
+    }
+
+    [HttpPut("settings")]
+    [ProducesResponseType(typeof(ApiResponse<StatsSectionSettingsDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateSectionSettings([FromBody] UpdateStatsSectionSettingsRequest request)
+    {
+        using var conn = new NpgsqlConnection(_tenantContext.DbConnectionString);
+        await conn.OpenAsync();
+
+        var badge = !string.IsNullOrWhiteSpace(request.Badge) ? request.Badge.Trim() : "Key Metrics & Institutional Record";
+        var title = !string.IsNullOrWhiteSpace(request.Title) ? request.Title.Trim() : "Campus at a Glance";
+        var subtitle = !string.IsNullOrWhiteSpace(request.Subtitle) ? request.Subtitle.Trim() : "Excellence in Numbers";
+
+        var existingId = await conn.ExecuteScalarAsync<Guid?>("SELECT id FROM stats_settings LIMIT 1;");
+        Guid id;
+        if (existingId.HasValue)
+        {
+            id = existingId.Value;
+            await conn.ExecuteAsync(@"
+                UPDATE stats_settings 
+                SET badge = @badge, title = @title, subtitle = @subtitle, is_active = @isActive, updated_at = CURRENT_TIMESTAMP
+                WHERE id = @id;",
+                new { id, badge, title, subtitle, isActive = request.IsActive });
+        }
+        else
+        {
+            id = Guid.NewGuid();
+            await conn.ExecuteAsync(@"
+                INSERT INTO stats_settings (id, badge, title, subtitle, is_active, updated_at)
+                VALUES (@id, @badge, @title, @subtitle, @isActive, CURRENT_TIMESTAMP);",
+                new { id, badge, title, subtitle, isActive = request.IsActive });
+        }
+
+        try
+        {
+            await conn.ExecuteAsync(@"
+                UPDATE page_sections 
+                SET title = @title, subtitle = @subtitle, updated_at = CURRENT_TIMESTAMP 
+                WHERE section_type IN ('STATISTICS', 'STATS') AND is_deleted = FALSE;",
+                new { title, subtitle });
+        }
+        catch { /* ignore if page_sections table schema is isolated */ }
+
+        var result = new StatsSectionSettingsDto
+        {
+            Id = id,
+            Badge = badge,
+            Title = title,
+            Subtitle = subtitle,
+            IsActive = request.IsActive,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        return Ok(ApiResponse<StatsSectionSettingsDto>.Ok(result, "Stats section settings updated"));
+    }
 }
 
 // -------------------------------------------------------------
@@ -1357,9 +1437,9 @@ public class QuoteAdminController : ControllerBase
             }));
         }
         var image = (string?)row.author_image_url;
-        if (string.IsNullOrWhiteSpace(image) || image == "/assets/principal.jpg")
+        if (image == "/assets/principal.jpg")
         {
-            image = "/assets/templates/common/leader_portrait.svg";
+            image = null;
         }
         var dto = new QuoteDto
         {
@@ -1383,17 +1463,13 @@ public class QuoteAdminController : ControllerBase
 
         var existing = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT id, author_image_url FROM quote_settings LIMIT 1;");
 
+        var resolvedQuoteText = request.QuoteText?.Trim() ?? string.Empty;
+        var resolvedAuthorName = request.AuthorName?.Trim() ?? string.Empty;
         var resolvedDesignation = request.GetResolvedDesignation();
         var resolvedImage = request.GetResolvedImageUrl();
-
-        if (string.IsNullOrWhiteSpace(resolvedImage) && existing is IDictionary<string, object> existingDict && existingDict.TryGetValue("author_image_url", out var imgVal))
+        if (resolvedImage == "/assets/principal.jpg")
         {
-            resolvedImage = imgVal?.ToString();
-        }
-
-        if (string.IsNullOrWhiteSpace(resolvedImage) || resolvedImage == "/assets/principal.jpg")
-        {
-            resolvedImage = "/assets/templates/common/leader_portrait.svg";
+            resolvedImage = null;
         }
         var resolvedSubText = request.SubText?.Trim() ?? string.Empty;
 
@@ -1412,8 +1488,8 @@ public class QuoteAdminController : ControllerBase
                 WHERE id = @id;",
                 new { 
                     id = existingId, 
-                    quoteText = request.QuoteText.Trim(), 
-                    authorName = request.AuthorName.Trim(), 
+                    quoteText = resolvedQuoteText, 
+                    authorName = resolvedAuthorName, 
                     designation = resolvedDesignation, 
                     authorImageUrl = resolvedImage, 
                     subText = resolvedSubText,
@@ -1422,8 +1498,8 @@ public class QuoteAdminController : ControllerBase
             return Ok(ApiResponse<QuoteDto>.Ok(new QuoteDto
             {
                 Id = existingId,
-                QuoteText = request.QuoteText,
-                AuthorName = request.AuthorName,
+                QuoteText = resolvedQuoteText,
+                AuthorName = resolvedAuthorName,
                 Designation = resolvedDesignation,
                 AuthorImageUrl = resolvedImage,
                 SubText = resolvedSubText,
@@ -1438,8 +1514,8 @@ public class QuoteAdminController : ControllerBase
                 VALUES (@newId, @quoteText, @authorName, @designation, @authorImageUrl, @subText, @isActive, CURRENT_TIMESTAMP);",
                 new { 
                     newId, 
-                    quoteText = request.QuoteText.Trim(), 
-                    authorName = request.AuthorName.Trim(), 
+                    quoteText = resolvedQuoteText, 
+                    authorName = resolvedAuthorName, 
                     designation = resolvedDesignation, 
                     authorImageUrl = resolvedImage, 
                     subText = resolvedSubText,
@@ -1448,8 +1524,8 @@ public class QuoteAdminController : ControllerBase
             return Ok(ApiResponse<QuoteDto>.Ok(new QuoteDto
             {
                 Id = newId,
-                QuoteText = request.QuoteText,
-                AuthorName = request.AuthorName,
+                QuoteText = resolvedQuoteText,
+                AuthorName = resolvedAuthorName,
                 Designation = resolvedDesignation,
                 AuthorImageUrl = resolvedImage,
                 SubText = resolvedSubText,
@@ -1528,4 +1604,381 @@ public class PreviewController : ControllerBase
     }
 }
 
+// -------------------------------------------------------------
+// Placements Admin Controller
+// -------------------------------------------------------------
+
+// -------------------------------------------------------------
+// Compliance / Mandatory Disclosures Admin Controller
+// -------------------------------------------------------------
+[ApiController]
+[Route("api/v1/admin/compliance")]
+[Authorize]
+public class ComplianceAdminController : ControllerBase
+{
+    private readonly CollegeModulesRepository _repo;
+
+    public ComplianceAdminController(CollegeModulesRepository repo) => _repo = repo;
+
+    [HttpGet]
+    public async Task<IActionResult> GetDocuments([FromQuery] string? category)
+    {
+        var docs = await _repo.GetComplianceDocumentsAsync(category);
+        return Ok(ApiResponse<IEnumerable<ComplianceDocumentDto>>.Ok(docs));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> AddDocument([FromBody] ComplianceDocumentDto dto)
+    {
+        var id = await _repo.AddComplianceDocumentAsync(dto);
+        dto.Id = id;
+        return Ok(ApiResponse<ComplianceDocumentDto>.Ok(dto, "Compliance document added"));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateDocument([FromRoute] Guid id, [FromBody] ComplianceDocumentDto dto)
+    {
+        dto.Id = id;
+        var success = await _repo.UpdateComplianceDocumentAsync(dto);
+        return Ok(ApiResponse<bool>.Ok(success, "Document updated"));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteDocument([FromRoute] Guid id)
+    {
+        var success = await _repo.DeleteComplianceDocumentAsync(id);
+        return Ok(ApiResponse<bool>.Ok(success, "Document deleted"));
+    }
+}
+
+// -------------------------------------------------------------
+// Transport / Bus Routes Admin Controller
+// -------------------------------------------------------------
+[ApiController]
+[Route("api/v1/admin/transport")]
+[Authorize]
+public class TransportAdminController : ControllerBase
+{
+    private readonly CollegeModulesRepository _repo;
+
+    public TransportAdminController(CollegeModulesRepository repo) => _repo = repo;
+
+    [HttpGet]
+    public async Task<IActionResult> GetRoutes()
+    {
+        var routes = await _repo.GetTransportRoutesAsync();
+        return Ok(ApiResponse<IEnumerable<TransportRouteDto>>.Ok(routes));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> AddRoute([FromBody] TransportRouteDto dto)
+    {
+        var id = await _repo.AddTransportRouteAsync(dto);
+        dto.Id = id;
+        return Ok(ApiResponse<TransportRouteDto>.Ok(dto, "Transport route added"));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateRoute([FromRoute] Guid id, [FromBody] TransportRouteDto dto)
+    {
+        dto.Id = id;
+        var success = await _repo.UpdateTransportRouteAsync(dto);
+        return Ok(ApiResponse<bool>.Ok(success, "Route updated"));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteRoute([FromRoute] Guid id)
+    {
+        var success = await _repo.DeleteTransportRouteAsync(id);
+        return Ok(ApiResponse<bool>.Ok(success, "Route deleted"));
+    }
+}
+
+// -------------------------------------------------------------
+// Hostels Admin Controller
+// -------------------------------------------------------------
+[ApiController]
+[Route("api/v1/admin/hostels")]
+[Authorize]
+public class HostelsAdminController : ControllerBase
+{
+    private readonly CollegeModulesRepository _repo;
+
+    public HostelsAdminController(CollegeModulesRepository repo) => _repo = repo;
+
+    [HttpGet]
+    public async Task<IActionResult> GetHostels()
+    {
+        var hostels = await _repo.GetHostelsAsync();
+        return Ok(ApiResponse<IEnumerable<HostelFacilityDto>>.Ok(hostels));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> AddHostel([FromBody] HostelFacilityDto dto)
+    {
+        var id = await _repo.AddHostelAsync(dto);
+        dto.Id = id;
+        return Ok(ApiResponse<HostelFacilityDto>.Ok(dto, "Hostel facility added"));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateHostel([FromRoute] Guid id, [FromBody] HostelFacilityDto dto)
+    {
+        dto.Id = id;
+        var success = await _repo.UpdateHostelAsync(dto);
+        return Ok(ApiResponse<bool>.Ok(success, "Hostel updated"));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteHostel([FromRoute] Guid id)
+    {
+        var success = await _repo.DeleteHostelAsync(id);
+        return Ok(ApiResponse<bool>.Ok(success, "Hostel deleted"));
+    }
+}
+
+// -------------------------------------------------------------
+// Library Admin Controller
+// -------------------------------------------------------------
+[ApiController]
+[Route("api/v1/admin/library")]
+[Authorize]
+public class LibraryAdminController : ControllerBase
+{
+    private readonly CollegeModulesRepository _repo;
+
+    public LibraryAdminController(CollegeModulesRepository repo) => _repo = repo;
+
+    [HttpGet]
+    public async Task<IActionResult> GetResources([FromQuery] string? type, [FromQuery] string? dept)
+    {
+        var list = await _repo.GetLibraryResourcesAsync(type, dept);
+        return Ok(ApiResponse<IEnumerable<LibraryResourceDto>>.Ok(list));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> AddResource([FromBody] LibraryResourceDto dto)
+    {
+        var id = await _repo.AddLibraryResourceAsync(dto);
+        dto.Id = id;
+        return Ok(ApiResponse<LibraryResourceDto>.Ok(dto, "Library resource added"));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateResource([FromRoute] Guid id, [FromBody] LibraryResourceDto dto)
+    {
+        dto.Id = id;
+        var success = await _repo.UpdateLibraryResourceAsync(dto);
+        return Ok(ApiResponse<bool>.Ok(success, "Library resource updated"));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteResource([FromRoute] Guid id)
+    {
+        var success = await _repo.DeleteLibraryResourceAsync(id);
+        return Ok(ApiResponse<bool>.Ok(success, "Resource deleted"));
+    }
+}
+
+// -------------------------------------------------------------
+// Alumni Admin Controller
+// -------------------------------------------------------------
+[ApiController]
+[Route("api/v1/admin/alumni")]
+[Authorize]
+public class AlumniAdminController : ControllerBase
+{
+    private readonly CollegeModulesRepository _repo;
+
+    public AlumniAdminController(CollegeModulesRepository repo) => _repo = repo;
+
+    [HttpGet]
+    public async Task<IActionResult> GetAlumni([FromQuery] bool distinguishedOnly = false)
+    {
+        var list = await _repo.GetAlumniMembersAsync(distinguishedOnly, includeAllStatuses: true);
+        return Ok(ApiResponse<IEnumerable<AlumniMemberDto>>.Ok(list));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> AddAlumni([FromBody] AlumniMemberDto dto)
+    {
+        var id = await _repo.RegisterAlumniAsync(dto);
+        dto.Id = id;
+        return Ok(ApiResponse<AlumniMemberDto>.Ok(dto, "Alumni record created"));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateAlumni([FromRoute] Guid id, [FromBody] AlumniMemberDto dto)
+    {
+        dto.Id = id;
+        var success = await _repo.UpdateAlumniMemberAsync(dto);
+        return Ok(ApiResponse<bool>.Ok(success, "Alumnus profile updated"));
+    }
+
+    [HttpPatch("{id}/status")]
+    public async Task<IActionResult> UpdateStatus([FromRoute] Guid id, [FromBody] string status)
+    {
+        var success = await _repo.UpdateAlumniStatusAsync(id, status);
+        return Ok(ApiResponse<bool>.Ok(success, "Status updated"));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteAlumni([FromRoute] Guid id)
+    {
+        var success = await _repo.DeleteAlumniAsync(id);
+        return Ok(ApiResponse<bool>.Ok(success, "Alumni deleted"));
+    }
+}
+
+// -------------------------------------------------------------
+// About Module Controller
+// -------------------------------------------------------------
+
+[ApiController]
+[Route("api/v1/admin/about")]
+[Authorize]
+[Permission(PermissionCodes.PageManage)]
+public class AboutController : ControllerBase
+{
+    private readonly CollegeModulesRepository _repo;
+
+    public AboutController(CollegeModulesRepository repo) => _repo = repo;
+
+    /// <summary>Get the current About module data for the admin CMS editor.</summary>
+    [HttpGet]
+    [ProducesResponseType(typeof(ApiResponse<AboutModuleDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAboutModule()
+    {
+        var data = await _repo.GetAboutModuleAsync();
+        return Ok(ApiResponse<AboutModuleDto>.Ok(data));
+    }
+
+    /// <summary>Save (upsert) all About module fields.</summary>
+    [HttpPut]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdateAboutModule([FromBody] UpdateAboutModuleRequest request)
+    {
+        var success = await _repo.UpsertAboutModuleAsync(request);
+        return Ok(ApiResponse<bool>.Ok(success, "About module saved successfully"));
+    }
+}
+
+// -------------------------------------------------------------
+// V12 Popup & Lightbox Announcements Admin Controller
+// -------------------------------------------------------------
+
+[ApiController]
+[Route("api/v1/admin/popups")]
+[Authorize]
+[Permission(PermissionCodes.PageManage)]
+public class PopupAnnouncementsAdminController : ControllerBase
+{
+    private readonly CollegeModulesRepository _repo;
+
+    public PopupAnnouncementsAdminController(CollegeModulesRepository repo) => _repo = repo;
+
+    [HttpGet]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<PopupAnnouncementDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllPopups()
+    {
+        var items = await _repo.GetAllPopupsAsync();
+        return Ok(ApiResponse<IEnumerable<PopupAnnouncementDto>>.Ok(items));
+    }
+
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof(ApiResponse<PopupAnnouncementDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPopupById([FromRoute] Guid id)
+    {
+        var item = await _repo.GetPopupByIdAsync(id);
+        if (item == null) return NotFound(ApiResponse<object>.Fail("Popup announcement not found"));
+        return Ok(ApiResponse<PopupAnnouncementDto>.Ok(item));
+    }
+
+    [HttpPost]
+    [ProducesResponseType(typeof(ApiResponse<Guid>), StatusCodes.Status201Created)]
+    public async Task<IActionResult> CreatePopup([FromBody] CreateOrUpdatePopupRequest request)
+    {
+        var id = await _repo.CreatePopupAsync(request);
+        return CreatedAtAction(nameof(GetPopupById), new { id }, ApiResponse<Guid>.Ok(id, "Popup announcement created successfully"));
+    }
+
+    [HttpPut("{id}")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdatePopup([FromRoute] Guid id, [FromBody] CreateOrUpdatePopupRequest request)
+    {
+        var success = await _repo.UpdatePopupAsync(id, request);
+        if (!success) return NotFound(ApiResponse<object>.Fail("Popup announcement not found"));
+        return Ok(ApiResponse<bool>.Ok(true, "Popup announcement updated successfully"));
+    }
+
+    [HttpPut("{id}/toggle")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> TogglePopupStatus([FromRoute] Guid id)
+    {
+        var newStatus = await _repo.TogglePopupStatusAsync(id);
+        if (newStatus == null) return NotFound(ApiResponse<object>.Fail("Popup announcement not found"));
+        return Ok(ApiResponse<bool>.Ok(newStatus.Value, $"Popup is now {(newStatus.Value ? "Active" : "Inactive")}"));
+    }
+
+    [HttpDelete("{id}")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> DeletePopup([FromRoute] Guid id)
+    {
+        var success = await _repo.DeletePopupAsync(id);
+        if (!success) return NotFound(ApiResponse<object>.Fail("Popup announcement not found"));
+        return Ok(ApiResponse<bool>.Ok(true, "Popup announcement deleted successfully"));
+    }
+}
+
+// -------------------------------------------------------------
+// Placement Companies Controller
+// -------------------------------------------------------------
+
+[ApiController]
+[Route("api/v1/admin/placement-companies")]
+[Authorize]
+public class PlacementCompaniesController : ControllerBase
+{
+    private readonly PlacementCompanyRepository _repo;
+
+    public PlacementCompaniesController(PlacementCompanyRepository repo) => _repo = repo;
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var list = await _repo.GetAllAsync(activeOnly: false);
+        return Ok(ApiResponse<IEnumerable<PlacementCompanyDto>>.Ok(list));
+    }
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById([FromRoute] Guid id)
+    {
+        var item = await _repo.GetByIdAsync(id);
+        if (item == null) return NotFound(ApiResponse<object>.Fail("Placement company not found"));
+        return Ok(ApiResponse<PlacementCompanyDto>.Ok(item));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreatePlacementCompanyRequest req)
+    {
+        var id = await _repo.CreateAsync(req);
+        var created = await _repo.GetByIdAsync(id);
+        return Created($"/api/v1/admin/placement-companies/{id}", ApiResponse<PlacementCompanyDto>.Ok(created!, "Placement company registered"));
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update([FromRoute] Guid id, [FromBody] UpdatePlacementCompanyRequest req)
+    {
+        var ok = await _repo.UpdateAsync(id, req);
+        return Ok(ApiResponse<bool>.Ok(ok, "Placement company updated"));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete([FromRoute] Guid id)
+    {
+        var ok = await _repo.DeleteAsync(id);
+        return Ok(ApiResponse<bool>.Ok(ok, "Placement company deleted"));
+    }
+}
 

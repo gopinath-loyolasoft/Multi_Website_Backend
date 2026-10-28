@@ -17,7 +17,7 @@ public class FeatureRepository
             SELECT f.id AS Id, f.code AS Code, f.name AS Name, f.description AS Description,
                    f.category AS Category, f.icon AS Icon, f.sort_order AS SortOrder,
                    f.is_active AS IsActive, f.created_at AS CreatedAt, f.updated_at AS UpdatedAt,
-                   (SELECT COUNT(*) FROM tenant_features tf WHERE tf.feature_code = f.code AND tf.is_enabled = TRUE) AS CollegesUsingCount
+                   (SELECT COUNT(*) FROM tenant_features tf JOIN tenants t ON t.id = tf.tenant_id WHERE tf.feature_code = f.code AND tf.is_enabled = TRUE AND t.is_deleted = FALSE) AS CollegesUsingCount
             FROM features f
             ORDER BY f.sort_order ASC, f.name ASC;";
         return await conn.QueryAsync<FeatureDto>(sql);
@@ -30,7 +30,7 @@ public class FeatureRepository
             SELECT f.id AS Id, f.code AS Code, f.name AS Name, f.description AS Description,
                    f.category AS Category, f.icon AS Icon, f.sort_order AS SortOrder,
                    f.is_active AS IsActive, f.created_at AS CreatedAt, f.updated_at AS UpdatedAt,
-                   (SELECT COUNT(*) FROM tenant_features tf WHERE tf.feature_code = f.code AND tf.is_enabled = TRUE) AS CollegesUsingCount
+                   (SELECT COUNT(*) FROM tenant_features tf JOIN tenants t ON t.id = tf.tenant_id WHERE tf.feature_code = f.code AND tf.is_enabled = TRUE AND t.is_deleted = FALSE) AS CollegesUsingCount
             FROM features f
             WHERE f.id = @id;";
         return await conn.QueryFirstOrDefaultAsync<FeatureDto>(sql, new { id });
@@ -43,7 +43,7 @@ public class FeatureRepository
             SELECT f.id AS Id, f.code AS Code, f.name AS Name, f.description AS Description,
                    f.category AS Category, f.icon AS Icon, f.sort_order AS SortOrder,
                    f.is_active AS IsActive, f.created_at AS CreatedAt, f.updated_at AS UpdatedAt,
-                   (SELECT COUNT(*) FROM tenant_features tf WHERE tf.feature_code = f.code AND tf.is_enabled = TRUE) AS CollegesUsingCount
+                   (SELECT COUNT(*) FROM tenant_features tf JOIN tenants t ON t.id = tf.tenant_id WHERE tf.feature_code = f.code AND tf.is_enabled = TRUE AND t.is_deleted = FALSE) AS CollegesUsingCount
             FROM features f
             WHERE f.code = @code;";
         return await conn.QueryFirstOrDefaultAsync<FeatureDto>(sql, new { code });
@@ -59,7 +59,7 @@ public class FeatureRepository
                 COUNT(*) FILTER (WHERE is_active = FALSE) AS DisabledFeatures,
                 COUNT(DISTINCT category) AS CategoriesCount,
                 (SELECT COUNT(*) FROM tenants WHERE is_deleted = FALSE) AS TotalColleges,
-                (SELECT COUNT(*) FROM tenant_features WHERE is_enabled = TRUE) AS TotalAssignments
+                (SELECT COUNT(*) FROM tenant_features tf JOIN tenants t ON t.id = tf.tenant_id WHERE tf.is_enabled = TRUE AND t.is_deleted = FALSE) AS TotalAssignments
             FROM features;";
         return await conn.QueryFirstAsync<FeatureSummaryDto>(sql);
     }
@@ -107,8 +107,10 @@ public class FeatureRepository
 
         var usageSql = @"
             SELECT t.id AS TenantId, t.tenant_code AS TenantCode, t.name AS TenantName,
+                   COALESCE(d.domain, LOWER(t.tenant_code) || '.localhost') AS PrimaryDomain,
                    COALESCE(tf.is_enabled, FALSE) AS IsEnabled
             FROM tenants t
+            LEFT JOIN domains d ON d.tenant_id = t.id AND d.is_primary = TRUE
             LEFT JOIN tenant_features tf ON tf.tenant_id = t.id AND tf.feature_code = @featureCode
             WHERE t.is_deleted = FALSE
             ORDER BY t.name ASC;";

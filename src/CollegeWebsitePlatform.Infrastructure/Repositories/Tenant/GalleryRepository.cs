@@ -88,24 +88,26 @@ public class GalleryRepository
     {
         using var conn = _db.CreateConnection();
         var category = string.IsNullOrWhiteSpace(req.Category) ? "Campus" : req.Category.Trim();
+        var slug = string.IsNullOrWhiteSpace(req.Slug) ? CollegeWebsitePlatform.Domain.Common.SlugHelper.Slugify(req.Title) : req.Slug.ToLowerInvariant().Trim();
         var sql = @"
             INSERT INTO galleries (title, slug, description, cover_image_url, category, is_published, created_at, updated_at)
-            VALUES (@Title, LOWER(@Slug), @Description, @CoverImageUrl, @Category, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            VALUES (@Title, LOWER(@slug), @Description, @CoverImageUrl, @Category, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id;";
 
-        return await conn.ExecuteScalarAsync<Guid>(sql, new { req.Title, req.Slug, req.Description, req.CoverImageUrl, Category = category });
+        return await conn.ExecuteScalarAsync<Guid>(sql, new { req.Title, slug, req.Description, req.CoverImageUrl, Category = category });
     }
 
     public async Task<bool> UpdateAsync(Guid id, UpdateGalleryRequest req)
     {
         using var conn = _db.CreateConnection();
         var category = string.IsNullOrWhiteSpace(req.Category) ? "Campus" : req.Category.Trim();
+        var slug = string.IsNullOrWhiteSpace(req.Slug) ? CollegeWebsitePlatform.Domain.Common.SlugHelper.Slugify(req.Title) : req.Slug.ToLowerInvariant().Trim();
         var sql = @"
             UPDATE galleries 
-            SET title = @Title, slug = LOWER(@Slug), description = @Description, cover_image_url = @CoverImageUrl, category = @Category, updated_at = CURRENT_TIMESTAMP 
+            SET title = @Title, slug = LOWER(@slug), description = @Description, cover_image_url = @CoverImageUrl, category = @Category, updated_at = CURRENT_TIMESTAMP 
             WHERE id = @id;";
 
-        var rows = await conn.ExecuteAsync(sql, new { id, req.Title, req.Slug, req.Description, req.CoverImageUrl, Category = category });
+        var rows = await conn.ExecuteAsync(sql, new { id, req.Title, slug, req.Description, req.CoverImageUrl, Category = category });
         return rows > 0;
     }
 

@@ -36,7 +36,11 @@ try
 {
     Log.Information("Starting CollegeWebsitePlatform API host");
 
-    var builder = WebApplication.CreateBuilder(args);
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+    {
+        Args = args,
+        ContentRootPath = AppContext.BaseDirectory
+    });
 
     // ─── Serilog from appsettings.json ──────────────────────────────────────────────────────────
     builder.Host.UseSerilog((context, services, configuration) =>
@@ -91,6 +95,8 @@ try
     builder.Services.AddScoped<ContactRepository>();
     builder.Services.AddScoped<NoticeRepository>();
     builder.Services.AddScoped<MarqueeRepository>();
+    builder.Services.AddScoped<CollegeModulesRepository>();
+    builder.Services.AddScoped<PlacementCompanyRepository>();
 
     // ─── 4. Application Services ─────────────────────────────────────────────────────────────────
     builder.Services.AddSingleton<JwtTokenService>();
@@ -183,7 +189,7 @@ try
         };
     });
 
-    // ─── 8. CORS — multi-domain localhost dev ────────────────────────────────────────────────────
+    // ─── 8. CORS — multi-domain localhost dev & production tenants ─────────────────────────────
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("AllowDynamicLocalhost", policy =>
@@ -193,11 +199,9 @@ try
                 if (string.IsNullOrWhiteSpace(origin)) return false;
                 try
                 {
-                    var host = new Uri(origin).Host.ToLowerInvariant();
-                    return host.EndsWith("localhost") 
-                        || host.EndsWith("localhost.com")
-                        || host == "127.0.0.1"
-                        || host.Contains("localhost");
+                    var uri = new Uri(origin);
+                    // Allow all valid http/https tenant origins, subdomains, and platform hosts
+                    return uri.Scheme == "http" || uri.Scheme == "https";
                 }
                 catch
                 {
@@ -242,6 +246,9 @@ try
             }
         });
     });
+
+    // ─── Health Checks ────────────────────────────────────────────────────────────────────────────
+    builder.Services.AddHealthChecks();
 
     // ─── Build App ───────────────────────────────────────────────────────────────────────────────
     var app = builder.Build();
@@ -288,19 +295,21 @@ try
     app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "College Website Platform API v1");
+        options.SwaggerEndpoint("./v1/swagger.json", "College Website Platform API v1");
         options.RoutePrefix = "swagger";
         options.DocumentTitle = "Multi-Tenant College Platform API";
     });
 
-    app.UseMiddleware<TenantResolutionMiddleware>();        // 6. Resolve tenant from domain
-    app.UseAuthentication();                               // 7. JWT validation
+    app.UseAuthentication();                               // 6. JWT validation
+    app.UseMiddleware<TenantResolutionMiddleware>();        // 7. Resolve tenant from domain
     app.UseAuthorization();                                // 8. Permission/role checks
 
     app.MapControllers();
+    app.MapHealthChecks("/health");
+    app.MapGet("/", () => Results.Redirect("swagger/index.html"));
 
-    Log.Information("API listening at  Swagger at http://localhost:5000/swagger");
-    app.Run("http://localhost:5000");
+    Log.Information("API starting up and listening for requests...");
+    app.Run();
 }
 catch (Exception ex)
 {
