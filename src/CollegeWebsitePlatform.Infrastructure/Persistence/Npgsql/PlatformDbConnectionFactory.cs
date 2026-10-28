@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using CollegeWebsitePlatform.Application.Common.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
@@ -12,7 +12,8 @@ public class PlatformDbConnectionFactory : IPlatformDbConnectionFactory
     public PlatformDbConnectionFactory(IConfiguration configuration)
     {
         _connectionString = configuration.GetConnectionString("PlatformConnection") 
-            ?? throw new InvalidOperationException("Connection string 'PlatformConnection' is not configured.");
+            ?? configuration["Platform:MasterConnectionString"]
+            ?? "Host=localhost;Port=5433;Database=dinamic_college_website;Username=postgres;Password=root;Include Error Detail=true";
     }
 
     public IDbConnection CreateConnection()

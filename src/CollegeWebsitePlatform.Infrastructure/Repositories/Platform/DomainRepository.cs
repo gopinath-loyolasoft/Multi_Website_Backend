@@ -96,8 +96,23 @@ public class DomainRepository
     public async Task<bool> UpdateAsync(Guid id, string domain, string domainType)
     {
         using var conn = _platformDb.CreateConnection();
-        var sql = "UPDATE domains SET domain = LOWER(@domain), domain_type = @domainType, updated_at = CURRENT_TIMESTAMP WHERE id = @id;";
-        var rows = await conn.ExecuteAsync(sql, new { id, domain, domainType });
+        var isPrimary = string.Equals(domainType, "PRIMARY", StringComparison.OrdinalIgnoreCase);
+        if (isPrimary)
+        {
+            var dom = await GetByIdAsync(id);
+            if (dom != null)
+            {
+                await conn.ExecuteAsync("UPDATE domains SET is_primary = FALSE WHERE tenant_id = @tenantId;", new { tenantId = dom.TenantId });
+            }
+        }
+
+        var sql = @"UPDATE domains 
+                    SET domain = LOWER(@domain), 
+                        domain_type = @domainType, 
+                        is_primary = CASE WHEN @isPrimary THEN TRUE ELSE is_primary END,
+                        updated_at = CURRENT_TIMESTAMP 
+                    WHERE id = @id;";
+        var rows = await conn.ExecuteAsync(sql, new { id, domain, domainType, isPrimary });
         return rows > 0;
     }
 

@@ -27,7 +27,7 @@ public static class DatabaseMigrator
         await MigratePlatformTablesAsync(platformConnectionString);
 
         // 4. Seed Platform Initial Data (Themes, Tenants, Domains, Features, Users, Roles, Permissions)
-        await SeedPlatformTablesAsync(platformConnectionString, masterConnectionString);
+        await SeedPlatformTablesAsync(platformConnectionString);
 
         // 5. Ensure Demo Tenant Databases exist only if they are active in tenants table
         using (var platformConn = new NpgsqlConnection(platformConnectionString))
@@ -56,13 +56,18 @@ public static class DatabaseMigrator
             await platformConn.OpenAsync();
             await masterConn.OpenAsync();
 
-            var tenants = await platformConn.QueryAsync<(string cs, string templateCode)>(
-                "SELECT db_connection_string, template_code FROM tenants WHERE db_connection_string IS NOT NULL AND is_deleted = FALSE AND status = 'ACTIVE';");
+            var tenants = await platformConn.QueryAsync<(string tenantCode, string cs, string templateCode)>(
+                "SELECT tenant_code AS tenantCode, db_connection_string AS cs, template_code AS templateCode FROM tenants WHERE db_connection_string IS NOT NULL AND is_deleted = FALSE AND status = 'ACTIVE';");
 
             foreach (var t in tenants)
             {
                 try
                 {
+                    // Ensure dynamic upload directory exists on disk for each tenant
+                    if (!string.IsNullOrWhiteSpace(t.tenantCode))
+                    {
+                        CollegeWebsitePlatform.Application.Services.MediaService.ResolveUploadDirectory(t.tenantCode);
+                    }
                     var cs = t.cs;
                     var csBuilder = new NpgsqlConnectionStringBuilder(cs);
                     var dbName = csBuilder.Database;
@@ -89,9 +94,8 @@ public static class DatabaseMigrator
                         _ => "engineering"
                     };
 
-                    using (var tConn = new NpgsqlConnection(cs))
-                    {
-                        await tConn.OpenAsync();
+                    using var tConn = new NpgsqlConnection(cs);
+                    await tConn.OpenAsync();
                         await tConn.ExecuteAsync(@"
                             UPDATE banners SET image_url = @b1 WHERE image_url = '/assets/banner1.jpg';
                             UPDATE banners SET image_url = @b2 WHERE image_url = '/assets/banner2.jpg';",
@@ -129,7 +133,6 @@ public static class DatabaseMigrator
                                     ('98.4%', '98.4', '', '%', 'Placement Record', 'TrendingUp', 4, TRUE);");
                             }
                         }
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -417,6 +420,10 @@ public static class DatabaseMigrator
         var migrationSql = @"
         CREATE EXTENSION IF NOT EXISTS ""pgcrypto"";
 
+        DROP TABLE IF EXISTS placement_offers CASCADE;
+        DROP TABLE IF EXISTS placement_statistics CASCADE;
+        DROP TABLE IF EXISTS placement_stats CASCADE;
+
         CREATE TABLE IF NOT EXISTS pages (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             slug VARCHAR(100) UNIQUE NOT NULL,
@@ -587,6 +594,20 @@ public static class DatabaseMigrator
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS placement_companies (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            company_name VARCHAR(150) NOT NULL,
+            company_logo_url TEXT NOT NULL,
+            company_website TEXT NULL,
+            display_order INT NOT NULL DEFAULT 1,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+            deleted_at TIMESTAMP WITH TIME ZONE NULL
+        );
+
+
         CREATE TABLE IF NOT EXISTS testimonials (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             student_name VARCHAR(150) NOT NULL,
@@ -687,6 +708,10 @@ public static class DatabaseMigrator
 
         ALTER TABLE faculty ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE faculty ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE NULL;
+        ALTER TABLE faculty ADD COLUMN IF NOT EXISTS qualification_details TEXT;
+        ALTER TABLE faculty ADD COLUMN IF NOT EXISTS research_interests TEXT;
+        ALTER TABLE faculty ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+        ALTER TABLE faculty ADD COLUMN IF NOT EXISTS office_room VARCHAR(100);
 
         ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE testimonials ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE NULL;
@@ -756,6 +781,21 @@ public static class DatabaseMigrator
         UPDATE stats_items SET value = metric WHERE value IS NULL;
         UPDATE stats_items SET prefix = '' WHERE prefix IS NULL;
         UPDATE stats_items SET suffix = '' WHERE suffix IS NULL;
+
+        -- Stats Counter Section Settings
+        CREATE TABLE IF NOT EXISTS stats_settings (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            badge VARCHAR(150) NOT NULL DEFAULT 'Key Metrics & Institutional Record',
+            title VARCHAR(255) NOT NULL DEFAULT 'Campus at a Glance',
+            subtitle VARCHAR(500) NOT NULL DEFAULT 'Excellence in Numbers',
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        INSERT INTO stats_settings (badge, title, subtitle, is_active)
+        SELECT 'Key Metrics & Institutional Record', 'Campus at a Glance', 'Excellence in Numbers', TRUE
+        WHERE NOT EXISTS (SELECT 1 FROM stats_settings);
 
         -- Quote / Welcome Message Management
         CREATE TABLE IF NOT EXISTS quote_settings (
@@ -832,7 +872,205 @@ public static class DatabaseMigrator
             is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
             deleted_at TIMESTAMP WITH TIME ZONE NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_admission_inquiries_status ON admission_inquiries(status);";
+        CREATE INDEX IF NOT EXISTS idx_admission_inquiries_status ON admission_inquiries(status);
+
+        -- =========================================================================
+        -- V10 Full College Platform Upgrades: Department Hub, Syllabi, Placements,
+        -- Compliance, Transport, Hostels, Library & Alumni Modules
+        -- =========================================================================
+
+        -- 1. Departments Rich Content Extensions
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS slug VARCHAR(150);
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS vision_mission TEXT;
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS hod_message TEXT;
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS hod_photo_url TEXT;
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS stream VARCHAR(100) DEFAULT 'Engineering';
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS total_semesters INT DEFAULT 8;
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS lab_count INT DEFAULT 0;
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS student_count INT DEFAULT 0;
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS laboratories_json TEXT DEFAULT '[]';
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS syllabi_json TEXT DEFAULT '[]';
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS syllabus_pdf_url TEXT;
+
+        -- 2. Courses Dynamic Semester Syllabi Extensions
+        ALTER TABLE courses ADD COLUMN IF NOT EXISTS slug VARCHAR(150);
+        ALTER TABLE courses ADD COLUMN IF NOT EXISTS total_semesters INT DEFAULT 8;
+        ALTER TABLE courses ADD COLUMN IF NOT EXISTS regulation_year VARCHAR(50) DEFAULT '2024';
+        ALTER TABLE courses ADD COLUMN IF NOT EXISTS intake INT DEFAULT 60;
+        ALTER TABLE courses ADD COLUMN IF NOT EXISTS semester_syllabi_json TEXT DEFAULT '[]';
+        ALTER TABLE courses ADD COLUMN IF NOT EXISTS curriculum_highlights_json TEXT DEFAULT '[]';
+
+        -- 3. Legacy Placement Tables Cleanup
+        DROP TABLE IF EXISTS placement_offers CASCADE;
+        DROP TABLE IF EXISTS placement_statistics CASCADE;
+        DROP TABLE IF EXISTS placement_stats CASCADE;
+
+        -- 4. Mandatory Disclosures & Statutory Compliance
+        CREATE TABLE IF NOT EXISTS compliance_documents (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            title VARCHAR(255) NOT NULL,
+            category VARCHAR(100) NOT NULL DEFAULT 'AICTE',
+            document_pdf_url TEXT NOT NULL,
+            file_size VARCHAR(50),
+            academic_year VARCHAR(50),
+            sort_order INT DEFAULT 0,
+            is_active BOOLEAN DEFAULT TRUE,
+            is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+            deleted_at TIMESTAMP WITH TIME ZONE NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- 5. Transport & Bus Routes
+        CREATE TABLE IF NOT EXISTS transport_routes (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            route_number VARCHAR(50) NOT NULL,
+            route_name VARCHAR(200) NOT NULL,
+            starting_point VARCHAR(150) NOT NULL,
+            destination VARCHAR(150) DEFAULT 'Campus',
+            departure_time VARCHAR(50) NOT NULL,
+            stops_json TEXT DEFAULT '[]',
+            bus_number VARCHAR(50),
+            driver_name VARCHAR(100),
+            driver_phone VARCHAR(50),
+            route_map_pdf_url TEXT,
+            is_active BOOLEAN DEFAULT TRUE,
+            is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+            deleted_at TIMESTAMP WITH TIME ZONE NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- 6. Hostels & Living Facilities
+        CREATE TABLE IF NOT EXISTS hostel_facilities (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(150) NOT NULL,
+            gender_type VARCHAR(20) NOT NULL DEFAULT 'BOYS',
+            capacity INT DEFAULT 200,
+            room_types_json TEXT DEFAULT '[]',
+            warden_name VARCHAR(100),
+            warden_phone VARCHAR(50),
+            mess_menu_pdf_url TEXT,
+            rules_pdf_url TEXT,
+            image_url TEXT,
+            is_active BOOLEAN DEFAULT TRUE,
+            is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+            deleted_at TIMESTAMP WITH TIME ZONE NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- 7. Central Library & Question Papers
+        CREATE TABLE IF NOT EXISTS library_resources (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            title VARCHAR(255) NOT NULL,
+            resource_type VARCHAR(50) NOT NULL DEFAULT 'QUESTION_PAPER',
+            department_code VARCHAR(50),
+            semester INT,
+            academic_year VARCHAR(50),
+            external_url TEXT,
+            pdf_url TEXT,
+            is_active BOOLEAN DEFAULT TRUE,
+            is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+            deleted_at TIMESTAMP WITH TIME ZONE NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- 8. Alumni Network & Stories
+        CREATE TABLE IF NOT EXISTS alumni_members (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            full_name VARCHAR(150) NOT NULL,
+            batch_year VARCHAR(50) NOT NULL,
+            degree_course VARCHAR(150) NOT NULL,
+            current_company VARCHAR(150),
+            current_designation VARCHAR(150),
+            testimonial_quote TEXT,
+            photo_url TEXT,
+            linkedin_url TEXT,
+            is_distinguished BOOLEAN DEFAULT FALSE,
+            status VARCHAR(50) DEFAULT 'APPROVED',
+            is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+            deleted_at TIMESTAMP WITH TIME ZONE NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- =========================================================================
+        -- V11 About Module: Structured college About page content
+        -- Single-row per tenant DB — history, vision, mission, leadership, etc.
+        -- =========================================================================
+        CREATE TABLE IF NOT EXISTS about_module (
+            id                   UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+            history_title        TEXT,
+            history_content      TEXT,
+            history_image_url    TEXT,
+            established_year     INT,
+            vision_text          TEXT,
+            mission_text         TEXT,
+            accreditations_json  TEXT         NOT NULL DEFAULT '[]',
+            achievements_json    TEXT         NOT NULL DEFAULT '[]',
+            leadership_json      TEXT         NOT NULL DEFAULT '[]',
+            core_values_json     TEXT         NOT NULL DEFAULT '[]',
+            is_active            BOOLEAN      NOT NULL DEFAULT TRUE,
+            updated_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+        );
+
+        -- Seed default row so GET /site/about never returns empty
+        INSERT INTO about_module (id)
+        SELECT gen_random_uuid()
+        WHERE NOT EXISTS (SELECT 1 FROM about_module);
+
+        -- =========================================================================
+        -- V12 Modal Popup & Lightbox Announcements
+        -- Dynamic posters, rich alerts, videos, target page links & timing rules
+        -- =========================================================================
+        CREATE TABLE IF NOT EXISTS popup_announcements (
+            id                    UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+            title                 VARCHAR(255) NOT NULL,
+            popup_type            VARCHAR(50)  NOT NULL DEFAULT 'IMAGE_POSTER',
+            image_url             TEXT,
+            badge_text            VARCHAR(100),
+            heading               VARCHAR(255),
+            description           TEXT,
+            video_url             TEXT,
+            target_url            TEXT,
+            cta_text              VARCHAR(100) DEFAULT 'Apply Online',
+            secondary_cta_text    VARCHAR(100),
+            secondary_target_url  TEXT,
+            open_in_new_tab       BOOLEAN      DEFAULT FALSE,
+            delay_seconds         INT          DEFAULT 1,
+            display_frequency     VARCHAR(50)  DEFAULT 'ONCE_PER_DAY',
+            target_pages          VARCHAR(50)  DEFAULT 'HOMEPAGE_ONLY',
+            custom_target_slugs   TEXT,
+            start_date            TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+            end_date              TIMESTAMPTZ,
+            is_active             BOOLEAN      DEFAULT TRUE,
+            is_deleted            BOOLEAN      NOT NULL DEFAULT FALSE,
+            deleted_at            TIMESTAMPTZ,
+            created_at            TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
+            updated_at            TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_popup_announcements_active 
+        ON popup_announcements (is_active, is_deleted, start_date, end_date);
+
+        INSERT INTO popup_announcements (
+            title, popup_type, image_url, badge_text, heading, description, 
+            target_url, cta_text, secondary_cta_text, secondary_target_url, 
+            delay_seconds, display_frequency, target_pages, is_active
+        )
+        SELECT 
+            'Admissions 2026-27 Announcement', 
+            'IMAGE_POSTER', 
+            '/assets/templates/engineering/banner1.svg', 
+            'Admissions Open 2026-27', 
+            'Admissions Open for Engineering, Arts & Science Programs', 
+            'Explore world-class academic degree tracks, merit scholarship grants, and futuristic research laboratories. Apply online today!', 
+            '/admissions', 
+            'Apply Online Now', 
+            'Download Prospectus', 
+            '/contact', 
+            1, 
+            'ONCE_PER_DAY', 
+            'HOMEPAGE_ONLY', 
+            TRUE
+        WHERE NOT EXISTS (SELECT 1 FROM popup_announcements);";
 
         await conn.ExecuteAsync(migrationSql);
     }
@@ -888,7 +1126,7 @@ public static class DatabaseMigrator
         return tenantCs;
     }
 
-    private static async Task SeedPlatformTablesAsync(string platformCs, string masterCs)
+    private static async Task SeedPlatformTablesAsync(string platformCs)
     {
         using var conn = new NpgsqlConnection(platformCs);
         await conn.OpenAsync();
@@ -1006,26 +1244,32 @@ public static class DatabaseMigrator
             AND p.module IN ('PAGES', 'NEWS', 'EVENTS', 'BANNERS', 'GALLERY', 'ACADEMIC', 'ACADEMICS', 'MEDIA')
             ON CONFLICT (role_id, permission_id) DO NOTHING;");
 
-        // 3. Features (All 18 categorized platform features)
+        // 3. Features (All categorized platform features including POPUPS)
         await conn.ExecuteAsync(@"
+            DELETE FROM tenant_features WHERE feature_code NOT IN ('PAGES', 'SECTIONS', 'MENUS', 'THEMES', 'ABOUT', 'BANNERS', 'MARQUEE', 'STATS', 'QUOTE', 'POPUPS', 'DEPARTMENTS', 'COURSES', 'FACULTY', 'NEWS', 'EVENTS', 'GALLERY', 'MEDIA', 'ADMISSIONS', 'NOTICES', 'CONTACT');
+            DELETE FROM features WHERE code NOT IN ('PAGES', 'SECTIONS', 'MENUS', 'THEMES', 'ABOUT', 'BANNERS', 'MARQUEE', 'STATS', 'QUOTE', 'POPUPS', 'DEPARTMENTS', 'COURSES', 'FACULTY', 'NEWS', 'EVENTS', 'GALLERY', 'MEDIA', 'ADMISSIONS', 'NOTICES', 'CONTACT');
+
             INSERT INTO features (code, name, description, category, icon, sort_order, is_active) VALUES 
-            ('PAGES', 'Pages Management', 'Manage custom dynamic web pages and sections', 'CMS', 'FileText', 1, TRUE),
-            ('SECTIONS', 'Page Sections', 'Modular section building blocks for custom layouts', 'CMS', 'Layout', 2, TRUE),
-            ('MENUS', 'Navigation Menus', 'Multi-level header and footer navigation menus', 'CMS', 'Menu', 3, TRUE),
-            ('BANNERS', 'Hero & Promo Banners', 'Rotational image banners and calls-to-action', 'Content', 'Image', 4, TRUE),
-            ('MARQUEE', 'Ticker & Alerts', 'Scrolling announcement tickers and breaking updates', 'CMS', 'Megaphone', 5, TRUE),
-            ('NEWS', 'Campus News', 'Publish articles, press releases, and campus achievements', 'Content', 'Newspaper', 6, TRUE),
-            ('EVENTS', 'Events & Calendar', 'Conferences, symposia, and academic calendar dates', 'Content', 'Calendar', 7, TRUE),
-            ('NOTICES', 'Official Notices', 'Circulars, PDF announcements, and student notifications', 'Content', 'Bell', 8, TRUE),
-            ('DEPARTMENTS', 'Academic Departments', 'Departmental profiles, vision, and head of department info', 'Academic', 'Building2', 9, TRUE),
-            ('COURSES', 'Courses & Programs', 'Undergraduate, graduate, and doctoral degree programs', 'Academic', 'BookOpen', 10, TRUE),
-            ('FACULTY', 'Faculty Directory', 'Academic staff profiles, qualifications, and research areas', 'Academic', 'Users', 11, TRUE),
-            ('GALLERY', 'Photo Galleries', 'Campus infrastructure, labs, sports, and festival albums', 'Media', 'Camera', 12, TRUE),
-            ('MEDIA', 'Media Library', 'Centralized document, image, and asset storage', 'Media', 'Folder', 13, TRUE),
-            ('TESTIMONIALS', 'Student Testimonials', 'Alumni quotes, ratings, and student reviews', 'Content', 'MessageSquare', 14, TRUE),
-            ('CONTACT', 'Contact & Inquiries', 'Campus address, inquiry submission forms, and map', 'Communication', 'Mail', 15, TRUE),
-            ('STATS', 'Milestones & Counters', 'Accreditations and metric stats', 'Content', 'BarChart2', 16, TRUE),
-            ('QUOTE', 'Principal / Dean Quote', 'Leadership message and official greeting block', 'Content', 'Quote', 17, TRUE)
+            ('PAGES', 'Dynamic Pages Builder', 'Create and manage custom content pages (About Us, Facilities, IQAC, etc.)', 'CORE CMS & LAYOUT', 'FileText', 1, TRUE),
+            ('SECTIONS', 'Page Sections Builder', 'Modular section building blocks for custom page layouts', 'CORE CMS & LAYOUT', 'Layout', 2, TRUE),
+            ('MENUS', 'Navigation Menus', 'Configure multi-level header navigation and footer link columns', 'CORE CMS & LAYOUT', 'Menu', 3, TRUE),
+            ('THEMES', 'Branding & Theme Colors', 'Customize logos, favicons, primary/secondary colors, and typography', 'CORE CMS & LAYOUT', 'Sliders', 4, TRUE),
+            ('ABOUT', 'About College Module', 'Manage history, vision, mission, leadership, accreditations, and core values', 'CORE CMS & LAYOUT', 'Building2', 5, TRUE),
+            ('BANNERS', 'Hero Promotional Slider', 'Multi-slide hero carousel with headings, subtitles, images, and action buttons', 'DYNAMIC HOME SECTIONS', 'Image', 6, TRUE),
+            ('MARQUEE', 'Flash News / Marquee Ticker', 'Scrolling announcement ticker for urgent alerts and highlight links', 'DYNAMIC HOME SECTIONS', 'Megaphone', 7, TRUE),
+            ('STATS', 'Key Metrics & Stats Counter', 'Numerical counter showcasing students, faculty, labs, and achievements', 'DYNAMIC HOME SECTIONS', 'BarChart2', 8, TRUE),
+            ('QUOTE', 'Leadership Quote & Message', 'Chairman / Principal greeting with portrait photo, signature, and vision', 'DYNAMIC HOME SECTIONS', 'Sparkles', 9, TRUE),
+            ('POPUPS', 'Modal Popup & Entry Lightbox', 'Dynamic lightbox posters, admission announcements, and video spotlights', 'DYNAMIC HOME SECTIONS', 'Layers', 10, TRUE),
+            ('DEPARTMENTS', 'Academic Departments', 'Manage academic departments, HOD profiles, and departmental overviews', 'ACADEMICS & FACULTY', 'Building2', 11, TRUE),
+            ('COURSES', 'Courses & Degree Programs', 'Catalog of UG, PG, and Ph.D. programs with eligibility and duration', 'ACADEMICS & FACULTY', 'BookOpen', 12, TRUE),
+            ('FACULTY', 'Faculty & Staff Directory', 'Directory of teaching and administrative staff with designations and bios', 'ACADEMICS & FACULTY', 'Users', 13, TRUE),
+            ('NEWS', 'Campus News & Press', 'Publish institutional news, press releases, and media coverage', 'CAMPUS LIFE & MEDIA', 'Newspaper', 14, TRUE),
+            ('EVENTS', 'College Events & Calendar', 'Schedule seminars, cultural festivals, sports days, and workshops', 'CAMPUS LIFE & MEDIA', 'Calendar', 15, TRUE),
+            ('GALLERY', 'Photo & Media Gallery', 'Categorized photo albums with lightbox image viewer', 'CAMPUS LIFE & MEDIA', 'Camera', 16, TRUE),
+            ('MEDIA', 'Central Media Library', 'Storage and management for uploaded campus assets, PDFs, and banners', 'CAMPUS LIFE & MEDIA', 'Folder', 17, TRUE),
+            ('ADMISSIONS', 'Online Admission Portal', 'Open admission announcements, prospectus downloads, and application gateway', 'ADMISSIONS & COMMUNICATION', 'Box', 18, TRUE),
+            ('NOTICES', 'Circulars & Exam Notices', 'Official downloadable circulars, examination schedules, and alerts', 'ADMISSIONS & COMMUNICATION', 'Bell', 19, TRUE),
+            ('CONTACT', 'Contact & Visitor Inquiries', 'Campus coordinates, Google Map integration, and visitor inquiry inbox', 'ADMISSIONS & COMMUNICATION', 'Mail', 20, TRUE)
             ON CONFLICT (code) DO UPDATE SET
                 name = EXCLUDED.name,
                 description = EXCLUDED.description,
@@ -1034,7 +1278,7 @@ public static class DatabaseMigrator
                 sort_order = EXCLUDED.sort_order,
                 updated_at = CURRENT_TIMESTAMP;
 
-            -- Ensure all registered tenants have all features enabled in tenant_features
+            -- Ensure all registered tenants have all active features enabled in tenant_features
             INSERT INTO tenant_features (tenant_id, feature_code, is_enabled)
             SELECT t.id, f.code, TRUE
             FROM tenants t
@@ -1050,7 +1294,7 @@ public static class DatabaseMigrator
                 'Modern Engineering & Technology',
                 'ENGINEERING',
                 'Tailored for engineering, polytechnic, and technical colleges with lab highlights, research metrics, and accreditation showcases.',
-                '[""PAGES"",""MENUS"",""BANNERS"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""GALLERY"",""MEDIA"",""CONTACT"",""STATS"",""MARQUEE""]'::jsonb,
+                '[""PAGES"",""MENUS"",""BANNERS"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""GALLERY"",""MEDIA"",""CONTACT"",""STATS"",""MARQUEE"",""POPUPS""]'::jsonb,
                 @themeBlueId,
                 '[]'::jsonb,
                 '[]'::jsonb,
@@ -1061,7 +1305,7 @@ public static class DatabaseMigrator
                 'Classic Arts & Science Academy',
                 'ARTS_SCIENCE',
                 'Designed for multi-disciplinary liberal arts, science, and commerce institutions with scholarly publications, faculty portfolios, and rich cultural galleries.',
-                '[""PAGES"",""MENUS"",""BANNERS"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""GALLERY"",""MEDIA"",""TESTIMONIALS"",""CONTACT"",""QUOTE"",""MARQUEE""]'::jsonb,
+                '[""PAGES"",""MENUS"",""BANNERS"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""GALLERY"",""MEDIA"",""CONTACT"",""QUOTE"",""MARQUEE"",""POPUPS""]'::jsonb,
                 @themeEmeraldId,
                 '[]'::jsonb,
                 '[]'::jsonb,
@@ -1072,7 +1316,7 @@ public static class DatabaseMigrator
                 'Clinical Healthcare & Medical Sciences',
                 'MEDICAL',
                 'Built for medical colleges, dental academies, and nursing schools featuring clinical rotatory schedules, hospital OPD statistics, trauma care units, and research labs.',
-                '[""PAGES"",""MENUS"",""BANNERS"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""MEDIA"",""CONTACT"",""STATS""]'::jsonb,
+                '[""PAGES"",""MENUS"",""BANNERS"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""MEDIA"",""CONTACT"",""STATS"",""POPUPS""]'::jsonb,
                 @themeTealId,
                 '[]'::jsonb,
                 '[]'::jsonb,
@@ -1083,7 +1327,7 @@ public static class DatabaseMigrator
                 'Comprehensive University Modern',
                 'UNIVERSITY',
                 'Prestigious collegiate aesthetic designed for multi-disciplinary universities with research centers, faculties, and international admissions.',
-                '[""PAGES"",""MENUS"",""MEDIA"",""CONTACT"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""ADMISSIONS"",""BANNERS"",""MARQUEE"",""STATS"",""TESTIMONIALS""]'::jsonb,
+                '[""PAGES"",""MENUS"",""MEDIA"",""CONTACT"",""NEWS"",""EVENTS"",""NOTICES"",""DEPARTMENTS"",""COURSES"",""FACULTY"",""ADMISSIONS"",""BANNERS"",""MARQUEE"",""STATS"",""POPUPS""]'::jsonb,
                 @themeCrimsonId,
                 '[]'::jsonb,
                 '[]'::jsonb,
@@ -1139,8 +1383,8 @@ public static class DatabaseMigrator
             // Seed tenant features
             await conn.ExecuteAsync(@"
                 INSERT INTO tenant_features (tenant_id, feature_code, is_enabled) VALUES 
-                (@rncTenantId, 'PAGES', TRUE), (@rncTenantId, 'NEWS', TRUE), (@rncTenantId, 'EVENTS', TRUE), (@rncTenantId, 'BANNERS', TRUE), (@rncTenantId, 'GALLERY', TRUE), (@rncTenantId, 'DEPARTMENTS', TRUE), (@rncTenantId, 'COURSES', TRUE), (@rncTenantId, 'FACULTY', TRUE), (@rncTenantId, 'TESTIMONIALS', TRUE), (@rncTenantId, 'ADMISSIONS', TRUE),
-                (@ktsTenantId, 'PAGES', TRUE), (@ktsTenantId, 'NEWS', TRUE), (@ktsTenantId, 'EVENTS', TRUE), (@ktsTenantId, 'BANNERS', TRUE), (@ktsTenantId, 'GALLERY', TRUE), (@ktsTenantId, 'DEPARTMENTS', TRUE), (@ktsTenantId, 'COURSES', TRUE), (@ktsTenantId, 'FACULTY', TRUE), (@ktsTenantId, 'TESTIMONIALS', TRUE), (@ktsTenantId, 'ADMISSIONS', TRUE)
+                (@rncTenantId, 'PAGES', TRUE), (@rncTenantId, 'NEWS', TRUE), (@rncTenantId, 'EVENTS', TRUE), (@rncTenantId, 'BANNERS', TRUE), (@rncTenantId, 'GALLERY', TRUE), (@rncTenantId, 'DEPARTMENTS', TRUE), (@rncTenantId, 'COURSES', TRUE), (@rncTenantId, 'FACULTY', TRUE), (@rncTenantId, 'ADMISSIONS', TRUE),
+                (@ktsTenantId, 'PAGES', TRUE), (@ktsTenantId, 'NEWS', TRUE), (@ktsTenantId, 'EVENTS', TRUE), (@ktsTenantId, 'BANNERS', TRUE), (@ktsTenantId, 'GALLERY', TRUE), (@ktsTenantId, 'DEPARTMENTS', TRUE), (@ktsTenantId, 'COURSES', TRUE), (@ktsTenantId, 'FACULTY', TRUE), (@ktsTenantId, 'ADMISSIONS', TRUE)
                 ON CONFLICT (tenant_id, feature_code) DO NOTHING;",
                 new { rncTenantId, ktsTenantId });
         }

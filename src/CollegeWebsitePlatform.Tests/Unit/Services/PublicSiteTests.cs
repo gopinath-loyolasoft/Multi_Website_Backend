@@ -166,22 +166,6 @@ public class PublicSiteTests
     }
 
     [Fact]
-    public async Task GetPublishedTestimonialsAsync_ReturnsTestimonials()
-    {
-        var testimonials = new List<TestimonialDto>
-        {
-            new() { Id = Guid.NewGuid(), StudentName = "Student 1", Rating = 5 },
-            new() { Id = Guid.NewGuid(), StudentName = "Student 2", Rating = 4 }
-        };
-
-        _siteServiceMock.Setup(s => s.GetPublishedTestimonialsAsync(10)).ReturnsAsync(testimonials);
-
-        var result = await _siteServiceMock.Object.GetPublishedTestimonialsAsync(10);
-
-        result.Should().HaveCount(2);
-    }
-
-    [Fact]
     public async Task SubmitContactFormAsync_ReturnsSubmission()
     {
         var request = new CreateContactSubmissionRequest

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using CollegeWebsitePlatform.Application.Common.Interfaces;
 using CollegeWebsitePlatform.Application.DTOs;
 using Dapper;
@@ -23,7 +23,8 @@ public class TemplateRepository
                    t.starter_menus::text AS StarterMenusRaw,
                    t.is_active AS IsActive, t.created_at AS CreatedAt, t.updated_at AS UpdatedAt,
                    th.code AS DefaultThemeCode, th.name AS DefaultThemeName,
-                   th.configuration::text AS ThemeConfigRaw
+                   th.configuration::text AS ThemeConfigRaw,
+                   (SELECT COUNT(*)::int FROM tenants tn WHERE tn.template_code = t.code) AS CollegesCount
             FROM templates t
             LEFT JOIN themes th ON th.id = t.default_theme_id
             WHERE t.is_active = TRUE
@@ -45,7 +46,8 @@ public class TemplateRepository
                    t.starter_menus::text AS StarterMenusRaw,
                    t.is_active AS IsActive, t.created_at AS CreatedAt, t.updated_at AS UpdatedAt,
                    th.code AS DefaultThemeCode, th.name AS DefaultThemeName,
-                   th.configuration::text AS ThemeConfigRaw
+                   th.configuration::text AS ThemeConfigRaw,
+                   (SELECT COUNT(*)::int FROM tenants tn WHERE tn.template_code = t.code) AS CollegesCount
             FROM templates t
             LEFT JOIN themes th ON th.id = t.default_theme_id
             WHERE t.id = @id;";
@@ -66,7 +68,8 @@ public class TemplateRepository
                    t.starter_menus::text AS StarterMenusRaw,
                    t.is_active AS IsActive, t.created_at AS CreatedAt, t.updated_at AS UpdatedAt,
                    th.code AS DefaultThemeCode, th.name AS DefaultThemeName,
-                   th.configuration::text AS ThemeConfigRaw
+                   th.configuration::text AS ThemeConfigRaw,
+                   (SELECT COUNT(*)::int FROM tenants tn WHERE tn.template_code = t.code) AS CollegesCount
             FROM templates t
             LEFT JOIN themes th ON th.id = t.default_theme_id
             WHERE t.code = @code;";
@@ -176,6 +179,14 @@ public class TemplateRepository
         object? starterPages = null;
         object? starterMenus = null;
         object? themeConfig = null;
+        int collegesCount = 0;
+
+        try
+        {
+            if (r.collegescount != null)
+                collegesCount = Convert.ToInt32(r.collegescount);
+        }
+        catch { }
 
         try
         {
@@ -228,6 +239,7 @@ public class TemplateRepository
             StarterPages = starterPages,
             StarterMenus = starterMenus,
             IsActive = r.isactive,
+            CollegesCount = collegesCount,
             CreatedAt = r.createdat ?? DateTime.UtcNow,
             UpdatedAt = r.updatedat ?? DateTime.UtcNow
         };

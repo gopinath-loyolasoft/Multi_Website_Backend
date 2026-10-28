@@ -16,7 +16,6 @@ public class CmsServiceTests
     private readonly Mock<IDepartmentService> _deptServiceMock;
     private readonly Mock<ICourseService> _courseServiceMock;
     private readonly Mock<IFacultyService> _facultyServiceMock;
-    private readonly Mock<ITestimonialService> _testimonialServiceMock;
     private readonly Mock<IMenuService> _menuServiceMock;
     private readonly Mock<IGalleryService> _galleryServiceMock;
 
@@ -28,7 +27,6 @@ public class CmsServiceTests
         _deptServiceMock = new Mock<IDepartmentService>();
         _courseServiceMock = new Mock<ICourseService>();
         _facultyServiceMock = new Mock<IFacultyService>();
-        _testimonialServiceMock = new Mock<ITestimonialService>();
         _menuServiceMock = new Mock<IMenuService>();
         _galleryServiceMock = new Mock<IGalleryService>();
     }
@@ -255,34 +253,5 @@ public class CmsServiceTests
 
         result.Should().NotBeNull();
         result.Code.Should().Be("MAIN_NAV");
-    }
-
-    // ────────────── Testimonials ──────────────
-
-    [Fact]
-    public async Task CreateTestimonialAsync_ReturnsTestimonial()
-    {
-        var request = new CreateTestimonialRequest
-        {
-            StudentName = "Rahul Kumar",
-            Content = "Excellent college",
-            Rating = 5
-        };
-        var created = new TestimonialDto
-        {
-            Id = Guid.NewGuid(),
-            StudentName = request.StudentName,
-            Content = request.Content,
-            Rating = 5,
-            IsPublished = true
-        };
-
-        _testimonialServiceMock.Setup(s => s.CreateTestimonialAsync(request)).ReturnsAsync(created);
-
-        var result = await _testimonialServiceMock.Object.CreateTestimonialAsync(request);
-
-        result.Should().NotBeNull();
-        result.StudentName.Should().Be("Rahul Kumar");
-        result.Rating.Should().Be(5);
     }
 }

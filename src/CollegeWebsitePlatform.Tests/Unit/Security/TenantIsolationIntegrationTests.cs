@@ -167,7 +167,6 @@ public class TenantIsolationIntegrationTests
     [InlineData("DEPARTMENTS")]
     [InlineData("COURSES")]
     [InlineData("FACULTY")]
-    [InlineData("TESTIMONIALS")]
     [InlineData("NOTICES")]
     public void AllFeatureCodesUsedByControllers_AreDefined(string featureCode)
     {

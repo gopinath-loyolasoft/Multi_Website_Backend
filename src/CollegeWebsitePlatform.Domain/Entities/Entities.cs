@@ -302,8 +302,17 @@ public class Department : ISoftDeletable
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;
+    public string Slug { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? HeadOfDepartment { get; set; }
+    public string? HodMessage { get; set; }
+    public string? HodPhotoUrl { get; set; }
+    public string? VisionMission { get; set; }
+    public string Stream { get; set; } = "Engineering";
+    public int TotalSemesters { get; set; } = 8;
+    public int LabCount { get; set; } = 0;
+    public int StudentCount { get; set; } = 0;
+    public string LaboratoriesJson { get; set; } = "[]";
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public string? ImageUrl { get; set; }
@@ -320,8 +329,14 @@ public class Course : ISoftDeletable
     public Guid DepartmentId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;
+    public string Slug { get; set; } = string.Empty;
     public string DegreeLevel { get; set; } = "UNDERGRADUATE";
     public decimal DurationYears { get; set; } = 3.0m;
+    public int TotalSemesters { get; set; } = 8;
+    public string RegulationYear { get; set; } = "2024";
+    public int Intake { get; set; } = 60;
+    public string SemesterSyllabiJson { get; set; } = "[]";
+    public string CurriculumHighlightsJson { get; set; } = "[]";
     public string? Description { get; set; }
     public string? Eligibility { get; set; }
     public string? FeeStructure { get; set; }
@@ -349,23 +364,6 @@ public class Faculty : ISoftDeletable
     public DateTime? DeletedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-}
-
-public class Testimonial : ISoftDeletable
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string StudentName { get; set; } = string.Empty;
-    public string? BatchYear { get; set; }
-    public string? CourseName { get; set; }
-    public string Content { get; set; } = string.Empty;
-    public string? PhotoUrl { get; set; }
-    public string? CurrentCompany { get; set; }
-    public int Rating { get; set; } = 5;
-    public bool IsPublished { get; set; } = true;
-    public int SortOrder { get; set; } = 0;
-    public bool IsDeleted { get; set; } = false;
-    public DateTime? DeletedAt { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class Media : ISoftDeletable
@@ -464,4 +462,158 @@ public class PreviewSession
     public DateTime ExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+
+public class ComplianceDocument : ISoftDeletable
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Title { get; set; } = string.Empty;
+    public string Category { get; set; } = "AICTE"; // AICTE, UGC, NIRF, NAAC, ANTI_RAGGING, ICC, AUDIT
+    public string DocumentPdfUrl { get; set; } = string.Empty;
+    public string? FileSize { get; set; }
+    public string? AcademicYear { get; set; }
+    public int SortOrder { get; set; } = 0;
+    public bool IsActive { get; set; } = true;
+    public bool IsDeleted { get; set; } = false;
+    public DateTime? DeletedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class TransportRoute : ISoftDeletable
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string RouteNumber { get; set; } = string.Empty;
+    public string RouteName { get; set; } = string.Empty;
+    public string StartingPoint { get; set; } = string.Empty;
+    public string Destination { get; set; } = "Campus";
+    public string DepartureTime { get; set; } = string.Empty;
+    public string StopsJson { get; set; } = "[]";
+    public string? BusNumber { get; set; }
+    public string? DriverName { get; set; }
+    public string? DriverPhone { get; set; }
+    public string? RouteMapPdfUrl { get; set; }
+    public bool IsActive { get; set; } = true;
+    public bool IsDeleted { get; set; } = false;
+    public DateTime? DeletedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class HostelFacility : ISoftDeletable
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = string.Empty;
+    public string GenderType { get; set; } = "BOYS"; // BOYS, GIRLS, FACULTY
+    public int Capacity { get; set; } = 200;
+    public string RoomTypesJson { get; set; } = "[]";
+    public string? WardenName { get; set; }
+    public string? WardenPhone { get; set; }
+    public string? MessMenuPdfUrl { get; set; }
+    public string? RulesPdfUrl { get; set; }
+    public string? ImageUrl { get; set; }
+    public bool IsActive { get; set; } = true;
+    public bool IsDeleted { get; set; } = false;
+    public DateTime? DeletedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class LibraryResource : ISoftDeletable
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Title { get; set; } = string.Empty;
+    public string ResourceType { get; set; } = "QUESTION_PAPER"; // QUESTION_PAPER, E_JOURNAL, SYLLABUS_BOOK, THESIS
+    public string? DepartmentCode { get; set; }
+    public int? Semester { get; set; }
+    public string? AcademicYear { get; set; }
+    public string? ExternalUrl { get; set; }
+    public string? PdfUrl { get; set; }
+    public bool IsActive { get; set; } = true;
+    public bool IsDeleted { get; set; } = false;
+    public DateTime? DeletedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class AlumniMember : ISoftDeletable
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string FullName { get; set; } = string.Empty;
+    public string BatchYear { get; set; } = string.Empty;
+    public string DegreeCourse { get; set; } = string.Empty;
+    public string? CurrentCompany { get; set; }
+    public string? CurrentDesignation { get; set; }
+    public string? TestimonialQuote { get; set; }
+    public string? PhotoUrl { get; set; }
+    public string? LinkedinUrl { get; set; }
+    public bool IsDistinguished { get; set; } = false;
+    public string Status { get; set; } = "APPROVED"; // PENDING, APPROVED, REJECTED
+    public bool IsDeleted { get; set; } = false;
+    public DateTime? DeletedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// Single-row per tenant database — holds all structured About page content.
+/// Managed via Admin CMS and served to the public website.
+/// </summary>
+public class AboutModule
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    // Institution Story / History
+    public string? HistoryTitle { get; set; }
+    public string? HistoryContent { get; set; }
+    public string? HistoryImageUrl { get; set; }
+    public int? EstablishedYear { get; set; }
+
+    // Vision & Mission
+    public string? VisionText { get; set; }
+    public string? MissionText { get; set; }
+
+    // JSON arrays (serialized)
+    public string AccreditationsJson { get; set; } = "[]";
+    public string AchievementsJson { get; set; } = "[]";
+    public string LeadershipJson { get; set; } = "[]";
+    public string CoreValuesJson { get; set; } = "[]";
+
+    public bool IsActive { get; set; } = true;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class PopupAnnouncement : ISoftDeletable
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Title { get; set; } = string.Empty;
+    public string PopupType { get; set; } = "IMAGE_POSTER"; // IMAGE_POSTER, RICH_CONTENT, VIDEO
+    
+    // Visual & Poster Content
+    public string? ImageUrl { get; set; }
+    public string? BadgeText { get; set; }
+    public string? Heading { get; set; }
+    public string? Description { get; set; }
+    public string? VideoUrl { get; set; }
+    
+    // Target Link & Actions
+    public string? TargetUrl { get; set; }
+    public string? CtaText { get; set; } = "Apply Online";
+    public string? SecondaryCtaText { get; set; }
+    public string? SecondaryTargetUrl { get; set; }
+    public bool OpenInNewTab { get; set; } = false;
+    
+    // Display Rules & Timing
+    public int DelaySeconds { get; set; } = 1;
+    public string DisplayFrequency { get; set; } = "ONCE_PER_DAY"; // EVERY_VISIT, ONCE_PER_SESSION, ONCE_PER_DAY
+    public string TargetPages { get; set; } = "HOMEPAGE_ONLY"; // HOMEPAGE_ONLY, ALL_PAGES, CUSTOM_SLUGS
+    public string? CustomTargetSlugs { get; set; }
+    
+    // Lifecycle & Scheduling
+    public DateTime? StartDate { get; set; } = DateTime.UtcNow;
+    public DateTime? EndDate { get; set; }
+    public bool IsActive { get; set; } = true;
+    
+    public bool IsDeleted { get; set; } = false;
+    public DateTime? DeletedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+
 

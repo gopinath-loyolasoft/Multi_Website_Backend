@@ -21,7 +21,6 @@ public static class SectionTypes
     public const string Departments  = "DEPARTMENTS";
     public const string Faculty      = "FACULTY";
     public const string Gallery      = "GALLERY";
-    public const string Testimonials = "TESTIMONIALS";
     public const string CallToAction = "CALL_TO_ACTION";
     public const string Video        = "VIDEO";
     public const string LogoGrid     = "LOGO_GRID";
@@ -37,7 +36,7 @@ public static class SectionTypes
     {
         Hero, HeroSlider, Text, Image, ImageText, Cards, Statistics, IconCards,
         News, Events, Notices, Courses, Departments, Faculty, Gallery,
-        Testimonials, CallToAction, Video, LogoGrid, Faq, Contact, Map,
+        CallToAction, Video, LogoGrid, Faq, Contact, Map,
         Banners, Stats
     };
 }
@@ -50,6 +49,7 @@ public static class FeatureCodes
     public const string Pages        = "PAGES";
     public const string Sections     = "SECTIONS";
     public const string Menus        = "MENUS";
+    public const string Themes       = "THEMES";
     public const string Banners      = "BANNERS";
     public const string Marquee      = "MARQUEE";
     public const string News         = "NEWS";
@@ -60,18 +60,16 @@ public static class FeatureCodes
     public const string Faculty      = "FACULTY";
     public const string Gallery      = "GALLERY";
     public const string Media        = "MEDIA";
-    public const string Testimonials = "TESTIMONIALS";
     public const string Contact      = "CONTACT";
     public const string Stats        = "STATS";
     public const string Quote        = "QUOTE";
-    public const string Placements   = "PLACEMENTS";
     public const string Admissions   = "ADMISSIONS";
 
     public static readonly IReadOnlyList<string> All = new[]
     {
-        Pages, Sections, Menus, Banners, Marquee,
+        Pages, Sections, Menus, Themes, Banners, Marquee,
         News, Events, Notices, Departments, Courses,
-        Faculty, Gallery, Media, Testimonials, Contact,
-        Stats, Quote, Placements, Admissions
+        Faculty, Gallery, Media, Contact,
+        Stats, Quote, Admissions
     };
 }

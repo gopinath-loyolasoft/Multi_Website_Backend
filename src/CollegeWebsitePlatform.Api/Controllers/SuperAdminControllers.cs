@@ -515,6 +515,42 @@ public class SuperAdminController : ControllerBase
         return Ok(ApiResponse<bool>.Ok(success, "User updated"));
     }
 
+    [HttpDelete("users/{id}")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DeleteAdminUser([FromRoute] Guid id)
+    {
+        try
+        {
+            var success = await _superAdminService.DeleteAdminUserAsync(id, CurrentUser);
+            if (!success) return NotFound(ApiResponse<object>.Fail("User not found"));
+            return Ok(ApiResponse<bool>.Ok(true, "Administrator deleted successfully"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(ex.Message));
+        }
+    }
+
+    [HttpPost("users/{id}/reset-password")]
+    [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ResetAdminUserPassword([FromRoute] Guid id, [FromBody] ResetAdminUserPasswordRequest request)
+    {
+        try
+        {
+            var success = await _superAdminService.ResetAdminUserPasswordAsync(id, request.NewPassword, CurrentUser);
+            if (!success) return NotFound(ApiResponse<object>.Fail("User not found"));
+            return Ok(ApiResponse<bool>.Ok(true, "Password reset successfully"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ApiResponse<object>.Fail(ex.Message));
+        }
+    }
+
     [HttpGet("users/{userId}/tenants")]
     [ProducesResponseType(typeof(ApiResponse<IEnumerable<UserTenantDto>>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUserTenants([FromRoute] Guid userId)
@@ -541,5 +577,28 @@ public class SuperAdminController : ControllerBase
     {
         var logs = await _superAdminService.GetFilteredAuditLogsAsync(filter);
         return Ok(ApiResponse<PaginatedResponse<AuditLogDto>>.Ok(logs));
+    }
+
+    // -------------------------------------------------------------
+    // Platform Branding (SuperAdmin Settings — persisted server-side)
+    // -------------------------------------------------------------
+
+    [HttpGet("branding")]
+    [ProducesResponseType(typeof(ApiResponse<PlatformBrandingDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPlatformBranding()
+    {
+        var branding = await _superAdminService.GetPlatformBrandingAsync();
+        return Ok(ApiResponse<PlatformBrandingDto>.Ok(branding));
+    }
+
+    [HttpPut("branding")]
+    [ProducesResponseType(typeof(ApiResponse<PlatformBrandingDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UpdatePlatformBranding([FromBody] UpdatePlatformBrandingRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.PlatformName))
+            return BadRequest(ApiResponse<object>.Fail("Platform name is required."));
+
+        var updated = await _superAdminService.UpdatePlatformBrandingAsync(request, CurrentUser);
+        return Ok(ApiResponse<PlatformBrandingDto>.Ok(updated, "Platform branding updated successfully"));
     }
 }

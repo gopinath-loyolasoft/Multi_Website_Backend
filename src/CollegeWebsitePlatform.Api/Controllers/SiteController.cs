@@ -5,21 +5,16 @@ using CollegeWebsitePlatform.Infrastructure.Repositories.Tenant;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace CollegeWebsitePlatform.Api.Controllers.Site;
+namespace CollegeWebsitePlatform.Api.Controllers;
 
 [ApiController]
 [Route("api/v1/site")]
 [AllowAnonymous]
-public class SiteController : ControllerBase
+public class SiteController(ISiteService siteService, INoticeService noticeService, CollegeModulesRepository modulesRepo) : ControllerBase
 {
-    private readonly ISiteService _siteService;
-    private readonly INoticeService _noticeService;
-
-    public SiteController(ISiteService siteService, INoticeService noticeService)
-    {
-        _siteService = siteService;
-        _noticeService = noticeService;
-    }
+    private readonly ISiteService _siteService = siteService;
+    private readonly INoticeService _noticeService = noticeService;
+    private readonly CollegeModulesRepository _modulesRepo = modulesRepo;
 
     [HttpGet("config")]
     [ProducesResponseType(typeof(ApiResponse<SiteConfigDto>), StatusCodes.Status200OK)]
@@ -161,14 +156,6 @@ public class SiteController : ControllerBase
         return Ok(ApiResponse<IEnumerable<FacultyDto>>.Ok(list));
     }
 
-    [HttpGet("testimonials")]
-    [ProducesResponseType(typeof(ApiResponse<IEnumerable<TestimonialDto>>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetTestimonials([FromQuery] int limit = 10)
-    {
-        var list = await _siteService.GetPublishedTestimonialsAsync(limit);
-        return Ok(ApiResponse<IEnumerable<TestimonialDto>>.Ok(list));
-    }
-
     [HttpGet("contact")]
     [ProducesResponseType(typeof(ApiResponse<TenantSettingsDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetContactInfo()
@@ -184,7 +171,6 @@ public class SiteController : ControllerBase
         var submission = await _siteService.SubmitContactFormAsync(request);
         return Ok(ApiResponse<ContactSubmissionDto>.Ok(submission, "Thank you! Your inquiry has been submitted."));
     }
-
 
     [HttpGet("notices")]
     [ProducesResponseType(typeof(ApiResponse<IEnumerable<NoticeDto>>), StatusCodes.Status200OK)]
@@ -217,4 +203,88 @@ public class SiteController : ControllerBase
         if (notice == null) return NotFound(ApiResponse<object>.Fail($"Notice '{slug}' not found"));
         return Ok(ApiResponse<NoticeDto>.Ok(notice));
     }
+
+    // ─── Public Placements API ────────────────────────────────────────────────
+    [HttpGet("placements")]
+    public async Task<IActionResult> GetPlacements([FromServices] PlacementCompanyRepository repo)
+    {
+        var list = await repo.GetAllAsync(activeOnly: true);
+        return Ok(ApiResponse<IEnumerable<PlacementCompanyDto>>.Ok(list));
+    }
+
+    [HttpGet("placement-companies")]
+    [ProducesResponseType(typeof(ApiResponse<IEnumerable<PlacementCompanyDto>>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPlacementCompanies([FromServices] PlacementCompanyRepository repo)
+    {
+        var list = await repo.GetAllAsync(activeOnly: true);
+        return Ok(ApiResponse<IEnumerable<PlacementCompanyDto>>.Ok(list));
+    }
+
+    // ─── Public Compliance API ────────────────────────────────────────────────
+    [HttpGet("compliance")]
+    public async Task<IActionResult> GetCompliance([FromQuery] string? category)
+    {
+        var docs = await _modulesRepo.GetComplianceDocumentsAsync(category);
+        return Ok(ApiResponse<IEnumerable<ComplianceDocumentDto>>.Ok(docs));
+    }
+
+    // ─── Public Transport API ─────────────────────────────────────────────────
+    [HttpGet("transport")]
+    public async Task<IActionResult> GetTransport()
+    {
+        var routes = await _modulesRepo.GetTransportRoutesAsync();
+        return Ok(ApiResponse<IEnumerable<TransportRouteDto>>.Ok(routes));
+    }
+
+    // ─── Public Hostels API ───────────────────────────────────────────────────
+    [HttpGet("hostels")]
+    public async Task<IActionResult> GetHostels()
+    {
+        var hostels = await _modulesRepo.GetHostelsAsync();
+        return Ok(ApiResponse<IEnumerable<HostelFacilityDto>>.Ok(hostels));
+    }
+
+    // ─── Public Library API ───────────────────────────────────────────────────
+    [HttpGet("library")]
+    public async Task<IActionResult> GetLibrary([FromQuery] string? type, [FromQuery] string? dept)
+    {
+        var resources = await _modulesRepo.GetLibraryResourcesAsync(type, dept);
+        return Ok(ApiResponse<IEnumerable<LibraryResourceDto>>.Ok(resources));
+    }
+
+    // ─── Public Alumni API ────────────────────────────────────────────────────
+    [HttpGet("alumni")]
+    public async Task<IActionResult> GetAlumni([FromQuery] bool distinguishedOnly = false)
+    {
+        var members = await _modulesRepo.GetAlumniMembersAsync(distinguishedOnly);
+        return Ok(ApiResponse<IEnumerable<AlumniMemberDto>>.Ok(members));
+    }
+
+    [HttpPost("alumni/register")]
+    public async Task<IActionResult> RegisterAlumni([FromBody] AlumniMemberDto dto)
+    {
+        dto.Status = "APPROVED"; // or PENDING
+        var id = await _modulesRepo.RegisterAlumniAsync(dto);
+        dto.Id = id;
+        return Ok(ApiResponse<AlumniMemberDto>.Ok(dto, "Thank you for registering with the Alumni Network!"));
+    }
+
+    // ─── Public About Module API ──────────────────────────────────────────────
+    [HttpGet("about")]
+    [ProducesResponseType(typeof(ApiResponse<AboutModuleDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAboutModule()
+    {
+        var data = await _modulesRepo.GetAboutModuleAsync();
+        return Ok(ApiResponse<AboutModuleDto>.Ok(data));
+    }
+
+    // ─── Public Popup / Lightbox Announcement API ────────────────────────────
+    [HttpGet("popup")]
+    [ProducesResponseType(typeof(ApiResponse<PopupAnnouncementDto?>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetActivePopup()
+    {
+        var popup = await _modulesRepo.GetActivePopupAnnouncementAsync();
+        return Ok(ApiResponse<PopupAnnouncementDto?>.Ok(popup));
+    }
 }
+

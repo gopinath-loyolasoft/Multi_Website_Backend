@@ -43,15 +43,50 @@ public class DnsVerificationService : IDnsVerificationService
     public async Task<DnsVerificationResult> VerifyDomainAsync(string domainName, string expectedToken)
     {
         var result = new DnsVerificationResult();
+        var cleanDomain = (domainName ?? "").Trim().ToLowerInvariant().Replace("http://", "").Replace("https://", "").Split(':')[0];
+
+        // 1. Platform wildcard subdomains and localhost aliases are automatically verified
+        if (cleanDomain.EndsWith(".loyolasoft.com") || cleanDomain.EndsWith(".localhost") || cleanDomain == "localhost" || cleanDomain == "127.0.0.1")
+        {
+            result.IsVerified = true;
+            result.Message = $"Domain '{cleanDomain}' is an active platform wildcard subdomain route.";
+            return result;
+        }
 
         try
         {
-            // Use nslookup to query TXT records for the domain
-            var records = await LookupTxtRecordsAsync(domainName);
+            // 2. Check if host or www.<domain> resolves via DNS (CNAME or A record)
+            IPAddress[]? addresses = null;
+            try
+            {
+                addresses = await Dns.GetHostAddressesAsync(cleanDomain);
+            }
+            catch
+            {
+                if (!cleanDomain.StartsWith("www."))
+                {
+                    try
+                    {
+                        addresses = await Dns.GetHostAddressesAsync("www." + cleanDomain);
+                    }
+                    catch
+                    {
+                        addresses = null;
+                    }
+                }
+            }
 
+            if (addresses != null && addresses.Length > 0)
+            {
+                result.IsVerified = true;
+                result.Message = $"Domain '{cleanDomain}' verified successfully via DNS CNAME/A resolution.";
+                return result;
+            }
+
+            // 3. Fallback: Query TXT records
+            var records = await LookupTxtRecordsAsync(cleanDomain);
             result.DnsRecordsFound = records;
 
-            // Check if any TXT record matches the expected format
             var expectedRecord = $"{TxtRecordPrefix}={expectedToken}";
             var matchingRecord = records.FirstOrDefault(r =>
                 r.Contains(expectedToken, StringComparison.OrdinalIgnoreCase) &&
@@ -60,20 +95,18 @@ public class DnsVerificationService : IDnsVerificationService
             if (matchingRecord != null)
             {
                 result.IsVerified = true;
-                result.Message = $"Domain '{domainName}' verified successfully. TXT record found: {matchingRecord}";
+                result.Message = $"Domain '{cleanDomain}' verified successfully via TXT record: {matchingRecord}";
             }
             else
             {
                 result.IsVerified = false;
-                result.Message = $"Domain '{domainName}' verification failed. No matching TXT record found. " +
-                    $"Expected: {expectedRecord}. " +
-                    $"Add this TXT record to your DNS, then try again.";
+                result.Message = $"Domain '{cleanDomain}' verification pending. Ensure CNAME (www -> qasite.loyolasoft.com) is configured in your DNS provider.";
             }
         }
         catch (Exception ex)
         {
             result.IsVerified = false;
-            result.Message = $"DNS lookup failed for '{domainName}': {ex.Message}";
+            result.Message = $"DNS lookup pending for '{cleanDomain}': {ex.Message}. DNS propagation may take a few minutes.";
         }
 
         return result;

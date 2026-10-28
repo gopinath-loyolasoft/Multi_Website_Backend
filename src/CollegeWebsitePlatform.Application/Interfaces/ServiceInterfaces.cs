@@ -21,7 +21,6 @@ public interface ISiteService
     Task<IEnumerable<CourseDto>> GetActiveCoursesAsync(Guid? departmentId = null);
     Task<CourseDto?> GetCourseByIdAsync(Guid id);
     Task<IEnumerable<FacultyDto>> GetFacultyDirectoryAsync(Guid? departmentId = null);
-    Task<IEnumerable<TestimonialDto>> GetPublishedTestimonialsAsync(int limit = 10);
     Task<bool> IsFeatureEnabledAsync(string featureCode);
     Task<TenantSettingsDto?> GetContactSettingsAsync();
     Task<ContactSubmissionDto> SubmitContactFormAsync(CreateContactSubmissionRequest request);
@@ -159,15 +158,6 @@ public interface IFacultyService
     Task<bool> DeleteFacultyAsync(Guid id);
 }
 
-public interface ITestimonialService
-{
-    Task<PaginatedResponse<TestimonialDto>> GetTestimonialsPaginatedAsync(PaginationFilter filter);
-    Task<TestimonialDto?> GetTestimonialByIdAsync(Guid id);
-    Task<TestimonialDto> CreateTestimonialAsync(CreateTestimonialRequest request);
-    Task<bool> UpdateTestimonialAsync(Guid id, UpdateTestimonialRequest request);
-    Task<bool> DeleteTestimonialAsync(Guid id);
-}
-
 public interface INoticeService
 {
     Task<PaginatedResponse<Notice>> GetNoticesPaginatedAsync(PaginationFilter filter);
@@ -291,11 +281,17 @@ public interface ISuperAdminService
     Task<IEnumerable<UserDto>> GetAdminUsersAsync();
     Task<UserDto> CreateAdminUserAsync(CreateAdminUserRequest request, string currentAdminUser);
     Task<bool> UpdateAdminUserAsync(Guid id, UpdateAdminUserRequest request, string currentAdminUser);
+    Task<bool> DeleteAdminUserAsync(Guid id, string currentAdminUser);
+    Task<bool> ResetAdminUserPasswordAsync(Guid id, string newPassword, string currentAdminUser);
     Task<IEnumerable<UserTenantDto>> GetUserTenantsAsync(Guid userId);
     Task<bool> AssignUserTenantsAsync(Guid userId, AssignUserTenantsRequest request, string currentAdminUser);
 
     // Audit Logs
     Task<PaginatedResponse<AuditLogDto>> GetFilteredAuditLogsAsync(AuditLogFilterRequest filter);
+
+    // Platform Branding (persisted in platform_settings)
+    Task<PlatformBrandingDto> GetPlatformBrandingAsync();
+    Task<PlatformBrandingDto> UpdatePlatformBrandingAsync(UpdatePlatformBrandingRequest request, string currentAdminUser);
 }
 
 public interface IAuditService

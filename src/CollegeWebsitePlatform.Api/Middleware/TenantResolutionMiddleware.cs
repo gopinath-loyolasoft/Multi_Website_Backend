@@ -17,8 +17,12 @@ public class TenantResolutionMiddleware
     {
         var path = context.Request.Path.Value?.ToLowerInvariant() ?? "";
 
-        // In TenantResolutionMiddleware.cs -> InvokeAsync:
-        if (path.StartsWith("/api/v1/health") ||
+        // Bypass routes that do not require a tenant
+        if (path == "" ||
+            path == "/" ||
+            path == "/health" ||
+            path.StartsWith("/health") ||
+            path.StartsWith("/api/v1/health") ||
             path.StartsWith("/api/v1/auth") ||
             path.StartsWith("/api/v1/superadmin") ||
             path.StartsWith("/api/v1/admin/tenants") ||
@@ -45,9 +49,15 @@ public class TenantResolutionMiddleware
             domain = context.Request.Host.Host;
         }
 
-        // Clean domain: strip port if present (e.g., kts.localhost:3000 -> kts.localhost)
+        // Clean domain: strip protocol, slashes, port (e.g., https://kts.localhost:3000/ -> kts.localhost)
         if (!string.IsNullOrWhiteSpace(domain))
         {
+            domain = domain.Replace("http://", "").Replace("https://", "");
+            var slashIdx = domain.IndexOf('/');
+            if (slashIdx >= 0)
+            {
+                domain = domain.Substring(0, slashIdx);
+            }
             var colonIdx = domain.IndexOf(':');
             if (colonIdx >= 0)
             {
@@ -65,6 +75,13 @@ public class TenantResolutionMiddleware
         // 2. Query tenant by domain with smart fallbacks
         var tenant = await tenantRepo.GetByDomainAsync(domain);
 
+        if (tenant == null && domain.EndsWith(".loyolasoft.com"))
+        {
+            var prefix = domain.Replace(".loyolasoft.com", "");
+            tenant = await tenantRepo.GetByCodeAsync(prefix) 
+                     ?? await tenantRepo.GetBySlugAsync(prefix);
+        }
+
         if (tenant == null && domain.EndsWith(".localhost.com"))
         {
             var altDomain = domain.Replace(".localhost.com", ".localhost");
@@ -80,7 +97,8 @@ public class TenantResolutionMiddleware
         if (tenant == null && domain.Contains('.'))
         {
             var prefix = domain.Split('.')[0];
-            tenant = await tenantRepo.GetByCodeAsync(prefix);
+            tenant = await tenantRepo.GetByCodeAsync(prefix)
+                     ?? await tenantRepo.GetBySlugAsync(prefix);
         }
 
         // Fallback ONLY for raw localhost/127.0.0.1 development when no specific subdomain was supplied
